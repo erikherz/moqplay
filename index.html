@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg viewBox='0 0 100 100' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50' cy='50' r='48' fill='url(%23o)'/%3E%3Cpath d='M30 25c5-3 15-5 20 0s10 10 5 18c-3 5-10 8-15 5s-12-8-15-13c-2-4 0-8 5-10z' fill='url(%23l)' opacity='.9'/%3E%3Cpath d='M55 30c8-2 18 2 22 10s2 20-8 25c-8 4-15 0-18-8s-4-15 0-20c2-4 6-6 4-7z' fill='url(%23l)' opacity='.9'/%3E%3Cpath d='M25 50c3-2 10-1 15 3s8 12 5 18c-2 5-8 8-14 6s-10-8-10-15c0-5 2-10 4-12z' fill='url(%23l)' opacity='.9'/%3E%3Cpath d='M60 60c5-1 12 2 15 8s2 14-5 18c-5 3-12 1-15-5s-3-12 0-16c2-3 3-4 5-5z' fill='url(%23l)' opacity='.9'/%3E%3Ccircle cx='50' cy='50' r='48' fill='none' stroke='url(%23a)' stroke-width='3' opacity='.6'/%3E%3Cellipse cx='35' cy='30' rx='12' ry='8' fill='white' opacity='.15' transform='rotate(-30 35 30)'/%3E%3Cdefs%3E%3ClinearGradient id='o' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%231e40af'/%3E%3Cstop offset='50%25' stop-color='%233b82f6'/%3E%3Cstop offset='100%25' stop-color='%230ea5e9'/%3E%3C/linearGradient%3E%3ClinearGradient id='l' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2322c55e'/%3E%3Cstop offset='100%25' stop-color='%2316a34a'/%3E%3C/linearGradient%3E%3ClinearGradient id='a' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2360a5fa'/%3E%3Cstop offset='100%25' stop-color='%23a78bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3C/svg%3E">
+  <title>MoQplay — Open Source MoQ Player</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #e0e0e0; }
+
+    .logo { display: flex; align-items: center; justify-content: center; gap: 0.75rem; text-decoration: none; cursor: pointer; }
+    .logo-icon { width: 56px; height: 56px; filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5)); }
+    .logo h1 { font-size: 2.8em; font-weight: 700; letter-spacing: -0.02em; background: linear-gradient(135deg, #60a5fa 0%, #34d399 50%, #a78bfa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    .hero { text-align: center; padding: 80px 24px 40px; }
+    .tagline { color: #888; font-size: 1.15em; margin-top: 12px; margin-bottom: 40px; }
+    .cta { display: flex; gap: 16px; justify-content: center; margin-bottom: 60px; }
+    .cta a { padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 1em; transition: all 0.2s; }
+    .cta a.primary { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; }
+    .cta a.primary:hover { background: linear-gradient(135deg, #2563eb, #7c3aed); }
+    .cta a.secondary { background: #1a1a1a; color: #ccc; border: 1px solid #333; }
+    .cta a.secondary:hover { background: #222; }
+
+    .section-title { text-align: center; font-size: 1.5em; font-weight: 600; margin-bottom: 40px; background: linear-gradient(135deg, #60a5fa 0%, #34d399 50%, #a78bfa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+    .player-section { max-width: 800px; margin: 0 auto; padding: 0 24px 40px; }
+    .config { display: flex; gap: 8px; margin-bottom: 12px; }
+    .config input { flex: 1; background: #111; border: 1px solid #1a1a1a; color: #e0e0e0; padding: 10px 14px; border-radius: 6px; font-size: 0.9em; font-family: 'SF Mono', 'Roboto Mono', monospace; }
+    .config input:focus { outline: none; border-color: #3b82f6; }
+    .config button { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; border: none; padding: 10px 24px; border-radius: 6px; font-size: 0.9em; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity 0.2s; }
+    .config button:hover { opacity: 0.9; }
+    video { width: 100%; background: #000; border-radius: 8px; border: 1px solid #1a1a1a; }
+    .status { text-align: center; color: #888; font-size: 0.85em; margin-top: 8px; min-height: 1.2em; }
+    .stats { font-family: 'SF Mono', 'Roboto Mono', monospace; font-size: 0.75em; color: #525252; margin-top: 8px; text-align: center; min-height: 1.2em; }
+
+    .features { max-width: 800px; margin: 0 auto; padding: 0 24px 60px; }
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .feature { background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px; }
+    .feature h3 { font-size: 0.95em; margin-bottom: 6px; color: #fff; }
+    .feature p { font-size: 0.8em; color: #888; line-height: 1.5; }
+
+    .getting-started { max-width: 720px; margin: 0 auto; padding: 0 24px 60px; }
+    .gs-step { background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px 24px; margin-bottom: 12px; }
+    .gs-step h3 { font-size: 0.95em; margin-bottom: 8px; color: #fff; }
+    .gs-step p { font-size: 0.85em; color: #888; line-height: 1.6; margin-bottom: 8px; }
+    .gs-step p:last-child { margin-bottom: 0; }
+    .gs-step code { background: #1a1a1a; color: #e0e0e0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: 'SF Mono', 'Roboto Mono', monospace; }
+    .gs-step pre { background: #0d1117; border: 1px solid #1a1a1a; border-radius: 8px; padding: 14px 18px; margin-top: 8px; overflow-x: auto; font-family: 'SF Mono', 'Roboto Mono', monospace; font-size: 0.8em; line-height: 1.6; color: #e6edf3; }
+
+    .footer { text-align: center; padding: 40px 24px; border-top: 1px solid #1a1a1a; color: #525252; font-size: 0.8em; }
+    .footer a { color: #60a5fa; text-decoration: none; }
+
+    @media (max-width: 600px) {
+      .config { flex-direction: column; }
+      .logo h1 { font-size: 2em; }
+    }
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <a class="logo" href="/">
+      <svg class="logo-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="48" fill="url(#oceanGradient)"/>
+        <path d="M30 25c5-3 15-5 20 0s10 10 5 18c-3 5-10 8-15 5s-12-8-15-13c-2-4 0-8 5-10z" fill="url(#landGradient)" opacity="0.9"/>
+        <path d="M55 30c8-2 18 2 22 10s2 20-8 25c-8 4-15 0-18-8s-4-15 0-20c2-4 6-6 4-7z" fill="url(#landGradient)" opacity="0.9"/>
+        <path d="M25 50c3-2 10-1 15 3s8 12 5 18c-2 5-8 8-14 6s-10-8-10-15c0-5 2-10 4-12z" fill="url(#landGradient)" opacity="0.9"/>
+        <path d="M60 60c5-1 12 2 15 8s2 14-5 18c-5 3-12 1-15-5s-3-12 0-16c2-3 3-4 5-5z" fill="url(#landGradient)" opacity="0.9"/>
+        <circle cx="50" cy="50" r="48" fill="none" stroke="url(#atmosphereGradient)" stroke-width="3" opacity="0.6"/>
+        <ellipse cx="35" cy="30" rx="12" ry="8" fill="white" opacity="0.15" transform="rotate(-30 35 30)"/>
+        <defs>
+          <linearGradient id="oceanGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e40af"/><stop offset="50%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#0ea5e9"/></linearGradient>
+          <linearGradient id="landGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#22c55e"/><stop offset="100%" stop-color="#16a34a"/></linearGradient>
+          <linearGradient id="atmosphereGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient>
+        </defs>
+      </svg>
+      <h1>MoQplay</h1>
+    </a>
+    <p class="tagline">Open source MoQ player for low-latency live streaming.</p>
+    <div class="cta">
+      <a class="primary" href="https://github.com/erikherz/moqplay">GitHub</a>
+      <a class="secondary" href="https://github.com/erikherz/moqpush-open">Publisher</a>
+    </div>
+  </div>
+
+  <div class="player-section">
+    <div class="section-title">Try It</div>
+    <div class="config">
+      <select id="protocol" style="background:#111;border:1px solid #1a1a1a;color:#e0e0e0;padding:10px 8px;border-radius:6px;font-size:0.9em;font-family:inherit;">
+        <option value="lite">MoQ Lite</option>
+        <option value="v14">MoQ v14</option>
+      </select>
+      <input id="relay" type="text" placeholder="Relay URL">
+      <input id="namespace" type="text" placeholder="Namespace">
+      <button onclick="play()">Play</button>
+    </div>
+    <div style="position:relative;">
+      <video id="video" autoplay muted playsinline controls></video>
+      <div id="overlay" style="display:none;position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,0.85);padding:16px 20px;font-family:'SF Mono','Roboto Mono',monospace;font-size:0.75em;line-height:1.7;color:#e5e5e5;pointer-events:none;z-index:10;">
+        <div style="font-weight:700;margin-bottom:6px;font-size:1.1em;">MoQplay</div>
+        <div id="overlay-stats"></div>
+      </div>
+    </div>
+    <div class="status" id="status">Enter a relay URL and namespace to start</div>
+    <div class="stats" id="stats" style="display:none;"></div>
+  </div>
+
+  <div class="features">
+    <div class="section-title">Features</div>
+    <div class="feature-grid">
+      <div class="feature">
+        <h3>Sub-Second TTFF</h3>
+        <p>~350-550ms time-to-first-frame on nearby relays. Direct MSE rendering with no player library overhead.</p>
+      </div>
+      <div class="feature">
+        <h3>Adaptive Bitrate</h3>
+        <p>Buffer-based ABR with automatic track switching. Supports multi-rendition CMAF streams.</p>
+      </div>
+      <div class="feature">
+        <h3>Player Stats</h3>
+        <p>Press 'I' for real-time overlay: TTFF, buffer health, ABR state, framerate, dropped frames, and stale fragment tracking.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="getting-started">
+    <div class="section-title">Usage</div>
+    <div class="gs-step">
+      <h3>Embed in your page</h3>
+      <p>For <strong>MoQ Lite</strong> relays, include the namespace in the relay URL path. For <strong>MoQ v14</strong> (Cloudflare), omit it.</p>
+      <pre>&lt;video id="video" autoplay muted playsinline&gt;&lt;/video&gt;
+&lt;script src="https://moqplay.com/js/fragment-appender.js"&gt;&lt;/script&gt;
+&lt;script src="https://moqplay.com/js/moqt-player.js"&gt;&lt;/script&gt;
+&lt;script src="https://moqplay.com/js/stats.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const video = document.getElementById('video');
+  // MoQ Lite: namespace in URL path
+  const player = new MoqtPlayer(video, 'https://relay.example.com/my-stream', 'my-stream');
+  // MoQ v14 (Cloudflare): namespace NOT in URL path
+  // const player = new MoqtPlayer(video, 'https://relay.example.com', 'my-stream');
+  player.connect();
+  video.play().catch(() =&gt; {});
+&lt;/script&gt;</pre>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>Publisher: <a href="https://github.com/erikherz/moqpush-open">moqpush</a> &middot; Player: <a href="https://github.com/erikherz/moqplay">moqplay</a></p>
+    <p style="margin-top:8px;">&copy; 2026 MoQplay &middot; <a href="mailto:erik@vivoh.com">erik@vivoh.com</a></p>
+  </div>
+
+  <script src="/js/fragment-appender.js"></script>
+  <script src="/js/moqt-player.js"></script>
+  <script>
+    let player = null;
+    let startTime = null;
+    let statsInterval = null;
+
+    // 'I' key toggles stats overlay
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'i' || e.key === 'I') {
+        const overlay = document.getElementById('overlay');
+        const stats = document.getElementById('stats');
+        const show = overlay.style.display === 'none';
+        overlay.style.display = show ? 'block' : 'none';
+        stats.style.display = show ? 'block' : 'none';
+      }
+    });
+
+    function updateOverlay() {
+      if (!player) return;
+      const overlay = document.getElementById('overlay');
+      if (overlay.style.display === 'none') return;
+
+      const s = player.getStats();
+      const video = document.getElementById('video');
+      const transport = 'WebTransport';
+      const uptime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+      const fps = video.getVideoPlaybackQuality?.()?.totalVideoFrames
+        ? Math.round(video.getVideoPlaybackQuality().totalVideoFrames / (uptime || 1)) : '?';
+      const dropped = video.getVideoPlaybackQuality?.()?.droppedVideoFrames || 0;
+      const t = player.getTiming?.() || {};
+
+      const row = (label, value) => `<div style="display:flex;justify-content:space-between;"><span style="color:#888;">${label}</span><span>${value}</span></div>`;
+
+      document.getElementById('overlay-stats').innerHTML = [
+        row('Transport', `MoQT / ${transport} / MSF`),
+        row('Relay', player.relayUrl?.replace('https://', '') || '-'),
+        row('', ''),
+        row('Framerate', `${fps} fps`),
+        row('Dropped Frames', dropped),
+        row('Buffer Health', `${s.bufferHealth || '0.00'}s`),
+        row('Target Latency', `${s.targetLatency || '-'}ms`),
+        row('Session', `${uptime}s`),
+        row('Stale Drops', `V:${s.droppedStaleVideo || 0} A:${s.droppedStaleAudio || 0}`),
+        row('', ''),
+        row('ABR Ladder', s.abrLadder || '-'),
+        row('Current Track', s.abrCurrentResolution || '-'),
+        row('ABR Switches', s.abrSwitchCount ?? 0),
+        row('', ''),
+        t.setupMs != null ? row('SETUP', `${t.setupMs}ms`) : '',
+        t.catalogMs != null ? row('Catalog', `${t.catalogMs}ms`) : '',
+        t.firstFragmentMs != null ? row('1st Fragment', `${t.firstFragmentMs}ms`) : '',
+        t.firstDecodedMs != null ? row('TTFF', `${t.firstDecodedMs}ms`) : '',
+      ].filter(Boolean).join('');
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('relay')) document.getElementById('relay').value = params.get('relay');
+    if (params.get('ns')) document.getElementById('namespace').value = params.get('ns');
+    if (params.get('proto')) document.getElementById('protocol').value = params.get('proto');
+    if (params.get('relay') && params.get('ns')) play();
+
+    async function play() {
+      let protocol = document.getElementById('protocol').value;
+      const rawRelay = document.getElementById('relay').value.trim().replace(/\/+$/, '');
+      const namespace = document.getElementById('namespace').value.trim();
+      const status = document.getElementById('status');
+      const video = document.getElementById('video');
+
+      if (!rawRelay || !namespace) {
+        status.textContent = 'Enter a relay URL and namespace';
+        return;
+      }
+
+      // Warn on likely protocol mismatch
+      const isCloudflare = rawRelay.includes('cloudflare') || rawRelay.includes('mediaovertquic');
+      if (isCloudflare && protocol === 'lite') {
+        if (!confirm('This looks like a Cloudflare relay, which uses MoQ v14.\n\nSwitch to MoQ v14?')) return;
+        document.getElementById('protocol').value = 'v14';
+        protocol = 'v14';
+      } else if (!isCloudflare && protocol === 'v14' && !rawRelay.includes('localhost')) {
+        if (!confirm('This relay may use MoQ Lite. Proceed with MoQ v14 anyway?')) return;
+      }
+
+      // MoQ Lite: namespace goes in URL path (relay root), SUBSCRIBE uses empty broadcast
+      // MoQ v14:  namespace stays out of URL, SUBSCRIBE includes it in the message
+      const relayUrl = protocol === 'lite'
+        ? rawRelay + '/' + encodeURIComponent(namespace)
+        : rawRelay;
+
+      if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
+      if (player) { player.destroy(); player = null; }
+      status.textContent = 'Connecting...';
+
+      try {
+        player = new MoqtPlayer(
+          video,
+          relayUrl,
+          namespace,
+          { onStatus: (msg) => { status.textContent = msg; } },
+        );
+        await player.connect();
+        status.textContent = 'Playing';
+        startTime = Date.now();
+        video.play().catch(() => {});
+        document.getElementById('overlay').style.display = 'none';
+        document.getElementById('stats').style.display = 'none';
+
+        statsInterval = setInterval(() => {
+          updateOverlay();
+          if (!player) return;
+          const s = player.getStats();
+          const transport = 'WebTransport';
+          document.getElementById('stats').innerHTML = [
+            `Transport: ${transport}`,
+            `Buffer: ${s.bufferHealth}s`,
+            `ABR: ${s.abrCurrentResolution || '-'} (${s.abrState})`,
+          ].filter(Boolean).join(' &nbsp;|&nbsp; ');
+        }, 1000);
+      } catch (e) {
+        status.textContent = `Error: ${e.message}`;
+      }
+    }
+  </script>
+</body>
+</html>

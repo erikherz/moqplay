@@ -736,6 +736,23 @@ function isValidOrigin(origin: string): boolean {
   return /^(usw|use|eu)\.gpcmoq\.com:\d+$/i.test(origin);
 }
 
+// Pick the nearest gpcmoq box for a publisher from Cloudflare's request geo, so
+// broadcasts land regionally instead of all on the default box. usw=San Jose,
+// use=Washington, eu=Amsterdam. Viewers co-locate on the publisher's box (relay_host),
+// so only the publisher needs geo-routing. Falls back to usw when geo is unknown.
+function nearestBox(request: Request): string {
+  const cf = (request as Request & { cf?: IncomingRequestCfProperties }).cf;
+  const continent = cf?.continent;
+  if (continent === "EU" || continent === "AF") return "eu.gpcmoq.com";
+  if (continent === "NA" || continent === "SA") {
+    const lon = typeof cf?.longitude === "string" ? parseFloat(cf.longitude) : NaN;
+    // Split the Americas roughly at the US central meridian: east of -100 -> Washington.
+    return Number.isFinite(lon) && lon > -100 ? "use.gpcmoq.com" : "usw.gpcmoq.com";
+  }
+  // AS / OC / AN / unknown -> US West is the closest of the three boxes.
+  return "usw.gpcmoq.com";
+}
+
 // Ask the autoscaler for the relay hosting this broadcast (spawns/sticks as needed).
 // When the viewer's cluster differs from the publisher's, pass `origin` (the
 // publisher's relay host:port) so the assigned edge relay pulls the stream across
@@ -961,10 +978,12 @@ async function handleStatsRoutes(
     const geo = getGeoFromRequest(request);
     console.log("Broadcast geo data:", JSON.stringify(geo));
 
-    // Ask the tinymoq autoscaler which relay to publish to (sticky per broadcast
-    // name). Optional publisher_cdn picks which CDN destination to assign on (testing).
+    // Ask the gpcmoq autoscaler which relay to publish to (sticky per broadcast name).
+    // Geo-route to the publisher's nearest box (usw/use/eu) unless an explicit
+    // publisher_cdn override is given (testing). Viewers co-locate via relay_host.
     // No static fallback: if /assign is down, relay is null and the client retries.
-    const assigned = await assignRelay(body.stream_id, body.publisher_cdn, undefined, env.TINYMOQ_PROVISION_KEY);
+    const publisherBox = body.publisher_cdn || nearestBox(request);
+    const assigned = await assignRelay(body.stream_id, publisherBox, undefined, env.TINYMOQ_PROVISION_KEY);
     const relayHost = assigned?.host ?? null;
     const relayPort = assigned?.port ?? null;
 

@@ -643,10 +643,10 @@ async function handleStreamRoutes(
 // Each gpcmoq box is its own autoscaler: a sticky, idempotent /assign API keyed by the
 // full broadcast name (the key MUST match what the client publishes/subscribes). The
 // three boxes (usw=San Jose, use=Washington, eu=Amsterdam) are tenant-isolated by the
-// TINYMOQ_PROVISION_KEY bearer. DEFAULT_AUTOSCALER is the default landing box;
-// publisher-cdn / viewer-cdn can override per request (and a viewer co-locates on the
-// publisher's box via its stored relay_host). Multi-region auto-selection can be added later.
-const DEFAULT_AUTOSCALER = "https://usw.gpcmoq.com";
+// TINYMOQ_PROVISION_KEY bearer. NOTE: pinned to the single box cdn.gpcmoq.com for the
+// full end-to-end test (no prod traffic). Restore usw/use/eu + geo-routing (commit 351d830)
+// for multi-region. publisher-cdn / viewer-cdn still override; viewers co-locate via relay_host.
+const DEFAULT_AUTOSCALER = "https://cdn.gpcmoq.com";
 // NOTE: there is no static relay fallback. The autoscaler endpoint is a control API
 // (TCP), not a MoQ relay — UDP/443 has no media listener. Every media connection must
 // use a dynamic host:port from /assign or /route (relays advertise as <box>.gpcmoq.com:<port>).
@@ -725,7 +725,7 @@ function generateContentKey(): string {
 // (e.g. eu.gpcmoq.com) to target a specific box. Only the gpcmoq relay boxes are
 // allowed — this guards the Worker's fetch against SSRF via user input.
 function autoscalerBase(cdnHost?: string | null): string {
-  if (cdnHost && /^(usw|use|eu)\.gpcmoq\.com$/i.test(cdnHost)) {
+  if (cdnHost && /^(usw|use|eu|cdn)\.gpcmoq\.com$/i.test(cdnHost)) {
     return `https://${cdnHost}`;
   }
   return DEFAULT_AUTOSCALER;
@@ -733,7 +733,7 @@ function autoscalerBase(cdnHost?: string | null): string {
 
 // A gpcmoq relay origin "host:port" (the publisher's relay), for cross-cluster pulls.
 function isValidOrigin(origin: string): boolean {
-  return /^(usw|use|eu)\.gpcmoq\.com:\d+$/i.test(origin);
+  return /^(usw|use|eu|cdn)\.gpcmoq\.com:\d+$/i.test(origin);
 }
 
 // Pick the nearest gpcmoq box for a publisher from Cloudflare's request geo, so
@@ -741,16 +741,10 @@ function isValidOrigin(origin: string): boolean {
 // use=Washington, eu=Amsterdam. Viewers co-locate on the publisher's box (relay_host),
 // so only the publisher needs geo-routing. Falls back to usw when geo is unknown.
 function nearestBox(request: Request): string {
-  const cf = (request as Request & { cf?: IncomingRequestCfProperties }).cf;
-  const continent = cf?.continent;
-  if (continent === "EU" || continent === "AF") return "eu.gpcmoq.com";
-  if (continent === "NA" || continent === "SA") {
-    const lon = typeof cf?.longitude === "string" ? parseFloat(cf.longitude) : NaN;
-    // Split the Americas roughly at the US central meridian: east of -100 -> Washington.
-    return Number.isFinite(lon) && lon > -100 ? "use.gpcmoq.com" : "usw.gpcmoq.com";
-  }
-  // AS / OC / AN / unknown -> US West is the closest of the three boxes.
-  return "usw.gpcmoq.com";
+  // Pinned to the single test box for the full end-to-end test (no prod traffic).
+  // Restore geo-routing across usw/use/eu by reverting commit 351d830.
+  void request;
+  return "cdn.gpcmoq.com";
 }
 
 // Ask the autoscaler for the relay hosting this broadcast (spawns/sticks as needed).

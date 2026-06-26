@@ -81,10 +81,9 @@ interface MoqWatchElement extends HTMLElement {
 }
 
 // Safari fallback relay servers (WebSocket-enabled)
+// Pinned to the single test box for the full end-to-end test (no prod traffic).
 const FALLBACK_RELAYS = [
-  "usw.gpcmoq.com",
-  "use.gpcmoq.com",
-  "eu.gpcmoq.com",
+  "cdn.gpcmoq.com",
 ];
 
 // Server status tracking
@@ -103,7 +102,7 @@ interface ServerStatus {
 
 const serverStatus: ServerStatus = {
   mode: needsPolyfill ? "websocket" : "webtransport",
-  selectedServer: "usw.gpcmoq.com",
+  selectedServer: "cdn.gpcmoq.com",
   connected: false,
   raceResults: [],
 };

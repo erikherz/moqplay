@@ -452,7 +452,7 @@ async function handleStreamRoutes(
     if (!row?.relay_host) {
       return new Response("offline", { status: 404 });
     }
-    const publisherCluster = row.relay_host; // cluster host, e.g. cdn.tinymoq.com / cdn-01.tinymoq.com
+    const publisherCluster = row.relay_host; // cluster host, e.g. usw.gpcmoq.com / eu.gpcmoq.com
 
     // Authoritative current relay for this broadcast (sticky per name).
     const current = await assignRelay(streamId, publisherCluster, undefined, env.TINYMOQ_PROVISION_KEY);
@@ -639,16 +639,20 @@ async function handleStreamRoutes(
 }
 
 // Stats routes handler
-// --- tinymoq broadcast→relay routing -------------------------------------
-// The autoscaler exposes a sticky, idempotent assignment API keyed by the full
-// broadcast name. The key MUST match what the client publishes/subscribes.
-const TINYMOQ_AUTOSCALER = "https://gpc-01.tinymoq.com";
+// --- gpcmoq broadcast→relay routing -------------------------------------
+// Each gpcmoq box is its own autoscaler: a sticky, idempotent /assign API keyed by the
+// full broadcast name (the key MUST match what the client publishes/subscribes). The
+// three boxes (usw=San Jose, use=Washington, eu=Amsterdam) are tenant-isolated by the
+// TINYMOQ_PROVISION_KEY bearer. DEFAULT_AUTOSCALER is the default landing box;
+// publisher-cdn / viewer-cdn can override per request (and a viewer co-locates on the
+// publisher's box via its stored relay_host). Multi-region auto-selection can be added later.
+const DEFAULT_AUTOSCALER = "https://usw.gpcmoq.com";
 // NOTE: there is no static relay fallback. The autoscaler endpoint is a control API
 // (TCP), not a MoQ relay — UDP/443 has no media listener. Every media connection must
-// use a dynamic host:port from /assign or /route (relays advertise as gpc-01.tinymoq.com:<port>).
+// use a dynamic host:port from /assign or /route (relays advertise as <box>.gpcmoq.com:<port>).
 
 function broadcastName(streamId: string): string {
-  return `earthseed.live/${streamId}.hang`;
+  return `moqplay.com/${streamId}.hang`;
 }
 
 // Relay-blind E2E: decide whether to hand the per-broadcast content key to this viewer.
@@ -718,18 +722,18 @@ function generateContentKey(): string {
 }
 
 // Resolve the autoscaler base URL, honoring an optional per-request CDN override
-// (e.g. gpc-01.tinymoq.com) for testing individual destinations. Only tinymoq CDN
-// hosts are allowed — this guards the Worker's fetch against SSRF via user input.
+// (e.g. eu.gpcmoq.com) to target a specific box. Only the gpcmoq relay boxes are
+// allowed — this guards the Worker's fetch against SSRF via user input.
 function autoscalerBase(cdnHost?: string | null): string {
-  if (cdnHost && /^(cdn|gpc)(-[a-z0-9]+)?\.tinymoq\.com$/i.test(cdnHost)) {
+  if (cdnHost && /^(usw|use|eu)\.gpcmoq\.com$/i.test(cdnHost)) {
     return `https://${cdnHost}`;
   }
-  return TINYMOQ_AUTOSCALER;
+  return DEFAULT_AUTOSCALER;
 }
 
-// A tinymoq relay origin "host:port" (the publisher's relay), for cross-cluster pulls.
+// A gpcmoq relay origin "host:port" (the publisher's relay), for cross-cluster pulls.
 function isValidOrigin(origin: string): boolean {
-  return /^(cdn|gpc)(-[a-z0-9]+)?\.tinymoq\.com:\d+$/i.test(origin);
+  return /^(usw|use|eu)\.gpcmoq\.com:\d+$/i.test(origin);
 }
 
 // Ask the autoscaler for the relay hosting this broadcast (spawns/sticks as needed).
@@ -764,7 +768,7 @@ async function assignRelay(
     const res = await fetch(`${base}/assign?${query}`, { headers: provisionHeaders(provisionKey) });
     if (res.ok) {
       const text = (await res.text()).trim();
-      let relayStr = text; // e.g. "cdn.tinymoq.com:8000"
+      let relayStr = text; // e.g. "usw.gpcmoq.com:8000"
       let key: string | undefined;
       // Per-stream / BYOK mode returns JSON; shared mode returns a bare "host:port".
       if (text.startsWith("{")) {

@@ -82,9 +82,9 @@ interface MoqWatchElement extends HTMLElement {
 
 // Safari fallback relay servers (WebSocket-enabled)
 const FALLBACK_RELAYS = [
-  "us-central.earthseed.live",
-  "eu-central.earthseed.live",
-  "ap-south.earthseed.live",
+  "usw.gpcmoq.com",
+  "use.gpcmoq.com",
+  "eu.gpcmoq.com",
 ];
 
 // Server status tracking
@@ -103,7 +103,7 @@ interface ServerStatus {
 
 const serverStatus: ServerStatus = {
   mode: needsPolyfill ? "websocket" : "webtransport",
-  selectedServer: "cdn.tinymoq.com",
+  selectedServer: "usw.gpcmoq.com",
   connected: false,
   raceResults: [],
 };
@@ -574,7 +574,7 @@ function createEncryptionBadge(): HTMLSpanElement {
 // Per-broadcast relay tokens are minted server-side (BYOK) and returned by the Worker:
 // publishers get one from POST /api/stats/broadcast, viewers from GET /route. There is no
 // static client token — the browser never holds a long-lived, all-paths credential.
-const NAMESPACE_PREFIX = "earthseed.live";
+const NAMESPACE_PREFIX = "moqplay.com";
 
 // Dynamic imports for the MoQ web components - MUST happen after polyfills are installed.
 // These register the headless light-DOM core elements <moq-publish> and <moq-watch>

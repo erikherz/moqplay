@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "playmoq",
+  "name": "moqplay",
   "compatibility_date": "2025-01-01",
   "main": "src/worker/index.ts",
   "assets": {
@@ -10,8 +10,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "playmoq-db",
-      "database_id": "7dffdd46-a604-4603-9c3f-f484ca98d892"
+      "database_name": "moqplay-db",
+      "database_id": "80ac8944-7627-47cc-998d-0a124423b73a"
     }
   ],
   "durable_objects": {
@@ -30,11 +30,11 @@
   ],
   "routes": [
     {
-      "pattern": "playmoq.live",
+      "pattern": "moqplay.com",
       "custom_domain": true
     },
     {
-      "pattern": "www.playmoq.live",
+      "pattern": "www.moqplay.com",
       "custom_domain": true
     }
   ]

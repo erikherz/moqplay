@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "playmoq",
+  "compatibility_date": "2025-01-01",
+  "main": "src/worker/index.ts",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "playmoq-db",
+      "database_id": "7dffdd46-a604-4603-9c3f-f484ca98d892"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "CHAT_ROOMS",
+        "class_name": "ChatRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ChatRoom"]
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "playmoq.live",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.playmoq.live",
+      "custom_domain": true
+    }
+  ]
+}

@@ -1,277 +1,1285 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg viewBox='0 0 100 100' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50' cy='50' r='48' fill='url(%23o)'/%3E%3Cpath d='M30 25c5-3 15-5 20 0s10 10 5 18c-3 5-10 8-15 5s-12-8-15-13c-2-4 0-8 5-10z' fill='url(%23l)' opacity='.9'/%3E%3Cpath d='M55 30c8-2 18 2 22 10s2 20-8 25c-8 4-15 0-18-8s-4-15 0-20c2-4 6-6 4-7z' fill='url(%23l)' opacity='.9'/%3E%3Cpath d='M25 50c3-2 10-1 15 3s8 12 5 18c-2 5-8 8-14 6s-10-8-10-15c0-5 2-10 4-12z' fill='url(%23l)' opacity='.9'/%3E%3Cpath d='M60 60c5-1 12 2 15 8s2 14-5 18c-5 3-12 1-15-5s-3-12 0-16c2-3 3-4 5-5z' fill='url(%23l)' opacity='.9'/%3E%3Ccircle cx='50' cy='50' r='48' fill='none' stroke='url(%23a)' stroke-width='3' opacity='.6'/%3E%3Cellipse cx='35' cy='30' rx='12' ry='8' fill='white' opacity='.15' transform='rotate(-30 35 30)'/%3E%3Cdefs%3E%3ClinearGradient id='o' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%231e40af'/%3E%3Cstop offset='50%25' stop-color='%233b82f6'/%3E%3Cstop offset='100%25' stop-color='%230ea5e9'/%3E%3C/linearGradient%3E%3ClinearGradient id='l' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2322c55e'/%3E%3Cstop offset='100%25' stop-color='%2316a34a'/%3E%3C/linearGradient%3E%3ClinearGradient id='a' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2360a5fa'/%3E%3Cstop offset='100%25' stop-color='%23a78bfa'/%3E%3C/linearGradient%3E%3C/defs%3E%3C/svg%3E">
-  <title>MoQplay — Open Source MoQ Player</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0a0a0a; color: #e0e0e0; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthseed Live | MoQ Live</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script type="module" src="/src/main.ts"></script>
+    <style>
+        /* Theme CSS Variables */
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #171717;
+            --bg-tertiary: #262626;
+            --bg-hover: #363636;
+            --border-color: #262626;
+            --border-hover: #404040;
+            --border-active: #525252;
+            --text-primary: #e5e5e5;
+            --text-secondary: #a3a3a3;
+            --text-muted: #737373;
+            --text-dimmed: #525252;
+            --input-bg: #262626;
+            --input-border: #404040;
+            --overlay-bg: rgba(10, 10, 10, 0.95);
+            --tooltip-bg: #1a1a1a;
+            --tooltip-border: #333;
+            --stream-id-bg: #052e16;
+            --stream-id-color: #22c55e;
+            --video-bg: #000;
+            --slider-track: #404040;
+        }
 
-    .logo { display: flex; align-items: center; justify-content: center; gap: 0.75rem; text-decoration: none; cursor: pointer; }
-    .logo-icon { width: 56px; height: 56px; filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5)); }
-    .logo h1 { font-size: 2.8em; font-weight: 700; letter-spacing: -0.02em; background: linear-gradient(135deg, #60a5fa 0%, #34d399 50%, #a78bfa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        :root.light {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f5f5f5;
+            --bg-tertiary: #e5e5e5;
+            --bg-hover: #d4d4d4;
+            --border-color: #e5e5e5;
+            --border-hover: #d4d4d4;
+            --border-active: #a3a3a3;
+            --text-primary: #171717;
+            --text-secondary: #525252;
+            --text-muted: #737373;
+            --text-dimmed: #a3a3a3;
+            --input-bg: #f5f5f5;
+            --input-border: #d4d4d4;
+            --overlay-bg: rgba(255, 255, 255, 0.95);
+            --tooltip-bg: #ffffff;
+            --tooltip-border: #e5e5e5;
+            --stream-id-bg: #dcfce7;
+            --stream-id-color: #166534;
+            --video-bg: #171717;
+            --slider-track: #d4d4d4;
+        }
 
-    .hero { text-align: center; padding: 80px 24px 40px; }
-    .tagline { color: #888; font-size: 1.15em; margin-top: 12px; margin-bottom: 40px; }
-    .cta { display: flex; gap: 16px; justify-content: center; margin-bottom: 60px; }
-    .cta a { padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: 500; font-size: 1em; transition: all 0.2s; }
-    .cta a.primary { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; }
-    .cta a.primary:hover { background: linear-gradient(135deg, #2563eb, #7c3aed); }
-    .cta a.secondary { background: #1a1a1a; color: #ccc; border: 1px solid #333; }
-    .cta a.secondary:hover { background: #222; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header {
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        /* Logo styling */
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .logo-icon {
+            width: 42px;
+            height: 42px;
+            filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5));
+        }
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #60a5fa 0%, #34d399 50%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.02em;
+        }
+        h1 .dot {
+            background: linear-gradient(135deg, #f97316 0%, #ef4444 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .tagline {
+            font-style: italic;
+            font-size: 0.9rem;
+            text-decoration: none;
+            margin-left: 0.5rem;
+            background: linear-gradient(135deg, #60a5fa 0%, #34d399 50%, #a78bfa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            opacity: 0.7;
+            transition: opacity 0.2s ease;
+        }
+        .tagline:hover {
+            opacity: 1;
+        }
+        .view-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #737373;
+            transition: color 0.2s ease;
+        }
+        .view-toggle:hover {
+            color: #3b82f6;
+        }
+        h2 { font-size: 1rem; font-weight: 400; color: var(--text-secondary); margin-bottom: 1rem; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+        }
+        section {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        video, canvas {
+            width: 100%;
+            max-height: 70vh;
+            object-fit: contain;
+            border-radius: 8px;
+            background: var(--video-bg);
+        }
+        footer {
+            margin-top: 2rem;
+            text-align: center;
+            color: var(--text-dimmed);
+            font-size: 0.875rem;
+        }
+        /* View visibility */
+        .hidden { display: none !important; }
 
-    .section-title { text-align: center; font-size: 1.5em; font-weight: 600; margin-bottom: 40px; background: linear-gradient(135deg, #60a5fa 0%, #34d399 50%, #a78bfa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        /* Stream controls */
+        .stream-info {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .stream-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .stream-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .stream-id {
+            font-family: monospace;
+            font-size: 1rem;
+            color: var(--stream-id-color);
+            background: var(--stream-id-bg);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+        }
+        .copy-icon-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.25rem;
+            display: flex;
+            align-items: center;
+            border-radius: 4px;
+        }
+        .copy-icon-btn:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+        .copy-icon-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+        .copy-icon-btn.copied {
+            color: #22c55e;
+        }
 
-    .player-section { max-width: 800px; margin: 0 auto; padding: 0 24px 40px; }
-    .config { display: flex; gap: 8px; margin-bottom: 12px; }
-    .config input { flex: 1; background: #111; border: 1px solid #1a1a1a; color: #e0e0e0; padding: 10px 14px; border-radius: 6px; font-size: 0.9em; font-family: 'SF Mono', 'Roboto Mono', monospace; }
-    .config input:focus { outline: none; border-color: #3b82f6; }
-    .config button { background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff; border: none; padding: 10px 24px; border-radius: 6px; font-size: 0.9em; font-weight: 600; cursor: pointer; font-family: inherit; transition: opacity 0.2s; }
-    .config button:hover { opacity: 0.9; }
-    video { width: 100%; background: #000; border-radius: 8px; border: 1px solid #1a1a1a; }
-    .status { text-align: center; color: #888; font-size: 0.85em; margin-top: 8px; min-height: 1.2em; }
-    .stats { font-family: 'SF Mono', 'Roboto Mono', monospace; font-size: 0.75em; color: #525252; margin-top: 8px; text-align: center; min-height: 1.2em; }
+        /* Broadcast view styling */
+        #broadcast-view section,
+        #broadcast-view .stream-info {
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #broadcast-view section {
+            text-align: center;
+        }
+        #broadcast-view section h2 {
+            text-align: left;
+        }
+        #broadcast-view moq-publish {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
 
-    .features { max-width: 800px; margin: 0 auto; padding: 0 24px 60px; }
-    .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    .feature { background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px; }
-    .feature h3 { font-size: 0.95em; margin-bottom: 6px; color: #fff; }
-    .feature p { font-size: 0.8em; color: #888; line-height: 1.5; }
+        /* Watch view styling */
+        #watch-view section {
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
 
-    .getting-started { max-width: 720px; margin: 0 auto; padding: 0 24px 60px; }
-    .gs-step { background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px 24px; margin-bottom: 12px; }
-    .gs-step h3 { font-size: 0.95em; margin-bottom: 8px; color: #fff; }
-    .gs-step p { font-size: 0.85em; color: #888; line-height: 1.6; margin-bottom: 8px; }
-    .gs-step p:last-child { margin-bottom: 0; }
-    .gs-step code { background: #1a1a1a; color: #e0e0e0; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; font-family: 'SF Mono', 'Roboto Mono', monospace; }
-    .gs-step pre { background: #0d1117; border: 1px solid #1a1a1a; border-radius: 8px; padding: 14px 18px; margin-top: 8px; overflow-x: auto; font-family: 'SF Mono', 'Roboto Mono', monospace; font-size: 0.8em; line-height: 1.6; color: #e6edf3; }
+        /* --- Live chat: desktop = column right of the video; mobile = bottom overlay --- */
+        .video-chat-layout {
+            display: flex;
+            gap: 1rem;
+            width: 100%;
+            max-width: 1280px;
+            margin: 0 auto;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        .video-chat-layout > section {
+            flex: 1 1 auto;
+            min-width: 0;
+            margin: 0 !important; /* override centered-column margins inside the flex row */
+        }
+        .chat-panel {
+            flex: 0 0 320px;
+            display: flex;
+            flex-direction: column;
+            height: 70vh;
+            max-height: 640px;
+            background: var(--bg-secondary, #1a1a1a);
+            border: 1px solid var(--input-border, #333);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .chat-panel.hidden { display: none; }
+        .chat-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border-bottom: 1px solid var(--input-border, #333);
+            font-size: 0.8rem;
+        }
+        .chat-title { font-weight: 600; color: var(--text-secondary, #a3a3a3); }
+        .chat-head.chat-offline .chat-title::after {
+            content: " · reconnecting…";
+            color: #f59e0b;
+            font-weight: 400;
+        }
+        .chat-name-btn, .chat-name-edit {
+            font-size: 0.75rem;
+            background: var(--bg-tertiary, #262626);
+            color: var(--text-primary, #fff);
+            border: 1px solid var(--input-border, #333);
+            border-radius: 999px;
+            padding: 2px 8px;
+            cursor: pointer;
+            max-width: 55%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .chat-name-edit { cursor: text; }
+        .chat-msgs {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            padding: 0.5rem 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            font-size: 0.85rem;
+            line-height: 1.35;
+        }
+        .chat-msg { overflow-wrap: anywhere; }
+        .chat-msg-name { font-weight: 600; color: #60a5fa; margin-right: 0.4rem; }
+        .chat-msg-text { color: var(--text-primary, #e5e5e5); }
+        .chat-form {
+            display: flex;
+            gap: 0.4rem;
+            padding: 0.5rem;
+            border-top: 1px solid var(--input-border, #333);
+        }
+        .chat-text {
+            flex: 1 1 auto;
+            min-width: 0;
+            background: var(--input-bg, #0a0a0a);
+            border: 1px solid var(--input-border, #333);
+            border-radius: 6px;
+            padding: 0.45rem 0.6rem;
+            color: var(--text-primary, #fff);
+            font-size: 0.85rem;
+        }
+        .chat-send {
+            flex: 0 0 auto;
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 0 0.7rem;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .chat-send:hover { background: #2563eb; }
 
-    .footer { text-align: center; padding: 40px 24px; border-top: 1px solid #1a1a1a; color: #525252; font-size: 0.8em; }
-    .footer a { color: #60a5fa; text-decoration: none; }
+        @media (max-width: 768px) {
+            .video-chat-layout { flex-direction: column; max-width: 100%; }
+            .video-chat-layout > section { width: 100%; }
+            /* Bottom overlay over the lower portion of the video (TikTok/Twitch style) */
+            .chat-panel:not(.hidden) {
+                position: fixed;
+                left: 0; right: 0; bottom: 0;
+                width: 100%;
+                height: 42vh;
+                flex: none;
+                max-height: none;
+                z-index: 60;
+                border: none;
+                border-radius: 14px 14px 0 0;
+                background: linear-gradient(to top, rgba(0,0,0,0.92) 55%, rgba(0,0,0,0.55) 85%, rgba(0,0,0,0));
+                backdrop-filter: blur(2px);
+                padding-bottom: env(safe-area-inset-bottom, 0);
+            }
+            .chat-panel:not(.hidden) .chat-head { border-bottom: none; }
+            /* Fade older messages toward the top of the overlay */
+            .chat-panel:not(.hidden) .chat-msgs {
+                -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22%);
+                mask-image: linear-gradient(to bottom, transparent 0, #000 22%);
+            }
+            .chat-panel:not(.hidden) .chat-msg-text {
+                color: #f5f5f5;
+                text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            }
+        }
+        .require-auth-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        .require-auth-toggle:hover {
+            color: var(--text-primary);
+        }
+        .viewers-link {
+            font-weight: 600;
+            background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+        }
+        .viewers-link:hover {
+            text-decoration: underline;
+            text-decoration-color: #60a5fa;
+        }
+        .require-auth-toggle input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+            background: #a3a3a3;
+            cursor: pointer;
+            position: relative;
+            flex-shrink: 0;
+        }
+        .require-auth-toggle input[type="checkbox"]:checked {
+            background: #60a5fa;
+        }
+        .require-auth-toggle input[type="checkbox"]:checked::after {
+            content: '';
+            position: absolute;
+            left: 5px;
+            top: 2px;
+            width: 4px;
+            height: 8px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
 
-    @media (max-width: 600px) {
-      .config { flex-direction: column; }
-      .logo h1 { font-size: 2em; }
-    }
-  </style>
+        /* Stats view */
+        .stats-view {
+            margin-top: 1rem;
+        }
+        .stats-view h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+        .stats-view h2 .stream-link {
+            background: linear-gradient(135deg, #60a5fa 0%, #34d399 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-decoration: none;
+            font-family: monospace;
+        }
+        .stats-view h2 .stream-link:hover {
+            text-decoration: underline;
+            text-decoration-color: #60a5fa;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .stats-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .stats-section h3 {
+            font-size: 1rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .stats-table th,
+        .stats-table td {
+            text-align: left;
+            padding: 0.75rem 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .stats-table th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .stats-table td {
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+        .stats-table td a {
+            color: #3b82f6;
+            text-decoration: none;
+            font-family: monospace;
+        }
+        .stats-table td a:hover {
+            text-decoration: underline;
+        }
+        .stats-table .empty {
+            color: var(--text-dimmed);
+            text-align: center;
+            font-style: italic;
+        }
+        .avatar-small {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+        .stats-flag {
+            font-size: 1.25rem;
+            cursor: default;
+        }
+        .stats-flag.clickable {
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+        .stats-flag.clickable:hover {
+            transform: scale(1.3);
+        }
+        .stats-login-required {
+            text-align: center;
+            padding: 3rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+        }
+        .stats-login-required h2 {
+            margin-bottom: 0.5rem;
+        }
+        .stats-login-required p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+        .stats-login-required .auth-buttons {
+            justify-content: center;
+        }
+
+        .share-input {
+            flex: 1;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-family: monospace;
+        }
+        .share-input:focus {
+            outline: none;
+            border-color: var(--border-active);
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-active);
+            transform: translateY(-1px);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .btn svg {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+        .btn-icon {
+            padding: 0.5rem;
+            gap: 0;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            border-color: #3b82f6;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+            border-color: #60a5fa;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            border-color: #22c55e;
+            color: #fff;
+        }
+        .btn-success:hover {
+            background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+            border-color: #22c55e;
+        }
+
+        /* Auth UI */
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid var(--input-border);
+        }
+        .user-name {
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            max-width: 120px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .user-flag {
+            font-size: 1.25rem;
+            line-height: 1;
+            cursor: default;
+        }
+        .user-flag.clickable {
+            cursor: pointer;
+            transition: transform 0.15s ease;
+        }
+        .user-flag.clickable:hover {
+            transform: scale(1.2);
+        }
+        .geo-tooltip {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.5rem;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        .geo-tooltip.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+        .geo-tooltip-content {
+            background: var(--tooltip-bg);
+            border: 1px solid var(--tooltip-border);
+            border-radius: 8px;
+            padding: 0.75rem;
+            min-width: 200px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+        .geo-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+            font-size: 0.8rem;
+        }
+        .geo-label {
+            color: var(--text-muted);
+        }
+        .geo-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .geo-action {
+            margin-top: 0.5rem;
+            padding-top: 0.5rem;
+            border-top: 1px solid var(--tooltip-border);
+            font-size: 0.75rem;
+            color: #3b82f6;
+            text-align: center;
+        }
+        #auth-container {
+            position: relative;
+        }
+        /* Auth buttons container */
+        .auth-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .btn-google {
+            background: #fff;
+            border-color: #dadce0;
+            color: #3c4043;
+            padding: 0.5rem 1rem;
+        }
+        .btn-google:hover {
+            background: #f8f9fa;
+            border-color: #dadce0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .btn-google svg {
+            width: 18px;
+            height: 18px;
+        }
+        /* Avatar placeholder for users without avatar */
+        .avatar-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        /* Footer */
+        footer a {
+            color: #737373;
+            text-decoration: none;
+        }
+        footer a:hover {
+            color: #a3a3a3;
+            text-decoration: underline;
+        }
+        /* Status panels (Browser Support, Server Status) */
+        .server-panel {
+            margin-top: 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: left;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .server-panel.hidden {
+            display: none;
+        }
+        .server-status-summary {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-indicator.connected {
+            background: #22c55e;
+            box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+        }
+        .status-indicator.partial {
+            background: #eab308;
+            box-shadow: 0 0 6px rgba(234, 179, 8, 0.6);
+        }
+        .status-indicator.disconnected {
+            background: #ef4444;
+            box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+        }
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 0.25rem;
+        }
+        .status-dot.green {
+            background: #22c55e;
+        }
+        .status-dot.yellow {
+            background: #eab308;
+        }
+        .status-dot.red {
+            background: #ef4444;
+        }
+        .support-note {
+            margin-top: 0.75rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-style: italic;
+        }
+        .support-note a {
+            color: #60a5fa;
+            text-decoration: underline;
+        }
+        .server-panel .details-btn {
+            background: none;
+            border: 1px solid var(--input-border);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-left: auto;
+        }
+        .server-panel .details-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+        .server-details {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .server-details.hidden {
+            display: none;
+        }
+        .server-details p {
+            margin-bottom: 0.5rem;
+        }
+        .latency-results {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+        }
+        .latency-results th,
+        .latency-results td {
+            padding: 0.4rem 0.6rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .latency-results td:last-child {
+            text-align: right;
+            white-space: nowrap;
+        }
+        .latency-results td:first-child {
+            width: 120px;
+            font-weight: 500;
+        }
+        .latency-results td:nth-child(2) {
+            width: 80px;
+        }
+        .latency-results th {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .latency-results tr.selected td {
+            color: #22c55e;
+            font-weight: 500;
+        }
+        .latency-results tr.failed td {
+            color: #ef4444;
+        }
+
+        /* Login required overlay */
+        #login-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--overlay-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            z-index: 10;
+        }
+        .login-required {
+            text-align: center;
+            padding: 2rem;
+        }
+        .login-required h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+        .login-required p {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+        .login-required .auth-buttons {
+            justify-content: center;
+            margin-bottom: 50px;
+        }
+        /* Watch stream section in login overlay */
+        .watch-stream-section {
+            margin-top: 50px;
+            margin-bottom: 1.5rem;
+        }
+        .watch-stream-section h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+        .watch-stream-input-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .watch-stream-input-row input {
+            width: 5.5ch;
+            padding: 0.5rem 0.5rem;
+            font-size: 1.1rem;
+            font-family: monospace;
+            text-align: center;
+            text-transform: lowercase;
+            letter-spacing: 0.1em;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 6px;
+            color: var(--text-primary);
+        }
+        .watch-stream-input-row input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .watch-stream-input-row input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.5;
+        }
+        .watch-stream-input-row button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            border: 1px solid #3b82f6;
+            border-radius: 6px;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .watch-stream-input-row button:hover {
+            background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+            border-color: #60a5fa;
+            transform: translateY(-1px);
+        }
+        .login-divider {
+            display: flex;
+            align-items: center;
+            margin: 1.5rem 0;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        .login-divider::before,
+        .login-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-color);
+        }
+        .login-divider span {
+            padding: 0 1rem;
+        }
+        #broadcast-view {
+            position: relative;
+            min-height: 500px;
+            margin-bottom: 15px;
+        }
+
+        /* MoQ core element base layout (headless light-DOM elements) */
+        moq-publish,
+        moq-watch {
+            display: block;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            width: 100%;
+        }
+        moq-publish video,
+        moq-watch canvas {
+            display: block;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            border-radius: 8px;
+            background: #000;
+        }
+
+        /* Broadcast control bar (custom controls driving <moq-publish>) */
+        .publish-controls {
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .publish-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            padding: 0.5rem 0.75rem;
+            color: var(--text-primary);
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 44px;
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+        .publish-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-active);
+            transform: translateY(-1px);
+        }
+        .publish-btn:active {
+            transform: translateY(0);
+        }
+        /* Selected device = dim (already chosen); available = bright (click me) */
+        .publish-btn.device-selected {
+            filter: grayscale(50%) brightness(0.7);
+            opacity: 1;
+        }
+        .publish-btn.device-available {
+            filter: brightness(1.1);
+            opacity: 1;
+        }
+        .publish-btn.device-available:hover {
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+        }
+        /* Combinable capture toggles: lit when ON, dim when OFF */
+        .publish-btn.toggle-btn { filter: grayscale(45%) brightness(0.78); opacity: 1; }
+        .publish-btn.toggle-btn:hover { filter: none; }
+        .publish-btn.toggle-btn.toggle-on {
+            filter: none;
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            border-color: #3b82f6;
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+        }
+        /* PiP composite preview (screen + draggable camera inset) */
+        .pip-canvas {
+            display: block;
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            border-radius: 8px;
+            background: #000;
+            cursor: grab;
+            touch-action: none;
+        }
+        .pip-canvas:active { cursor: grabbing; }
+
+        /* Broadcast status indicator (emoji + hover tooltip) */
+        .publish-status {
+            position: relative;
+            font-size: 1.25rem;
+            line-height: 1;
+            cursor: default;
+            display: inline-flex;
+            align-items: center;
+        }
+        .publish-status::after {
+            content: attr(data-status-text);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            margin-bottom: 4px;
+        }
+        .publish-status:hover::after {
+            opacity: 1;
+        }
+
+        /* HTML overlay button and input */
+        .html-overlay-btn {
+            font-family: monospace;
+            font-weight: bold;
+            font-size: 0.9rem !important;
+            cursor: pointer;
+        }
+        .html-overlay-btn.active {
+            box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+        }
+        .html-overlay-container {
+            width: 100%;
+            max-width: 900px;
+            margin: 1rem auto 0;
+            display: none;
+        }
+        .html-overlay-container.visible {
+            display: block;
+        }
+        .html-overlay-input {
+            width: 100%;
+            min-height: 60px;
+            max-height: 300px;
+            padding: 0.75rem;
+            background: var(--input-bg);
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            resize: vertical;
+            overflow: auto;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .html-overlay-input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+        .html-overlay-input:empty::before {
+            content: "Enter HTML content to display below video for viewers...";
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+        .html-overlay-hint {
+            margin-top: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: left;
+        }
+
+        /* Viewer HTML overlay display */
+        .viewer-html-overlay {
+            width: 100%;
+            max-width: 900px;
+            margin: 1rem auto 0;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            text-align: center;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        .viewer-html-overlay:empty {
+            display: none;
+        }
+        .viewer-html-overlay a {
+            color: #3b82f6;
+            text-decoration: underline;
+        }
+        .viewer-html-overlay a:hover {
+            color: #60a5fa;
+        }
+        .viewer-html-overlay img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+
+        /* Theme toggle button */
+        .theme-toggle {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--input-border);
+            border-radius: 8px;
+            padding: 0.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            color: var(--text-primary);
+        }
+        .theme-toggle:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-active);
+        }
+        .theme-toggle svg {
+            width: 18px;
+            height: 18px;
+        }
+        .theme-toggle .sun-icon { display: none; }
+        .theme-toggle .moon-icon { display: block; }
+        :root.light .theme-toggle .sun-icon { display: block; }
+        :root.light .theme-toggle .moon-icon { display: none; }
+    </style>
 </head>
 <body>
-  <div class="hero">
-    <a class="logo" href="/">
-      <svg class="logo-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="50" cy="50" r="48" fill="url(#oceanGradient)"/>
-        <path d="M30 25c5-3 15-5 20 0s10 10 5 18c-3 5-10 8-15 5s-12-8-15-13c-2-4 0-8 5-10z" fill="url(#landGradient)" opacity="0.9"/>
-        <path d="M55 30c8-2 18 2 22 10s2 20-8 25c-8 4-15 0-18-8s-4-15 0-20c2-4 6-6 4-7z" fill="url(#landGradient)" opacity="0.9"/>
-        <path d="M25 50c3-2 10-1 15 3s8 12 5 18c-2 5-8 8-14 6s-10-8-10-15c0-5 2-10 4-12z" fill="url(#landGradient)" opacity="0.9"/>
-        <path d="M60 60c5-1 12 2 15 8s2 14-5 18c-5 3-12 1-15-5s-3-12 0-16c2-3 3-4 5-5z" fill="url(#landGradient)" opacity="0.9"/>
-        <circle cx="50" cy="50" r="48" fill="none" stroke="url(#atmosphereGradient)" stroke-width="3" opacity="0.6"/>
-        <ellipse cx="35" cy="30" rx="12" ry="8" fill="white" opacity="0.15" transform="rotate(-30 35 30)"/>
-        <defs>
-          <linearGradient id="oceanGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1e40af"/><stop offset="50%" stop-color="#3b82f6"/><stop offset="100%" stop-color="#0ea5e9"/></linearGradient>
-          <linearGradient id="landGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#22c55e"/><stop offset="100%" stop-color="#16a34a"/></linearGradient>
-          <linearGradient id="atmosphereGradient" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#60a5fa"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient>
-        </defs>
-      </svg>
-      <h1>MoQplay</h1>
-    </a>
-    <p class="tagline">Open source MoQ player for low-latency live streaming.</p>
-    <div class="cta">
-      <a class="primary" href="https://github.com/erikherz/moqplay">GitHub</a>
-      <a class="secondary" href="https://github.com/erikherz/moqpush-open">Publisher</a>
+    <div class="container">
+        <header>
+            <a href="/" class="logo">
+                <svg class="logo-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Ocean base -->
+                    <circle cx="50" cy="50" r="48" fill="url(#oceanGradient)"/>
+                    <!-- Continents -->
+                    <path d="M30 25c5-3 15-5 20 0s10 10 5 18c-3 5-10 8-15 5s-12-8-15-13c-2-4 0-8 5-10z" fill="url(#landGradient)" opacity="0.9"/>
+                    <path d="M55 30c8-2 18 2 22 10s2 20-8 25c-8 4-15 0-18-8s-4-15 0-20c2-4 6-6 4-7z" fill="url(#landGradient)" opacity="0.9"/>
+                    <path d="M25 50c3-2 10-1 15 3s8 12 5 18c-2 5-8 8-14 6s-10-8-10-15c0-5 2-10 4-12z" fill="url(#landGradient)" opacity="0.9"/>
+                    <path d="M60 60c5-1 12 2 15 8s2 14-5 18c-5 3-12 1-15-5s-3-12 0-16c2-3 3-4 5-5z" fill="url(#landGradient)" opacity="0.9"/>
+                    <!-- Atmosphere glow -->
+                    <circle cx="50" cy="50" r="48" fill="none" stroke="url(#atmosphereGradient)" stroke-width="3" opacity="0.6"/>
+                    <!-- Shine -->
+                    <ellipse cx="35" cy="30" rx="12" ry="8" fill="white" opacity="0.15" transform="rotate(-30 35 30)"/>
+                    <defs>
+                        <linearGradient id="oceanGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#1e40af"/>
+                            <stop offset="50%" stop-color="#3b82f6"/>
+                            <stop offset="100%" stop-color="#0ea5e9"/>
+                        </linearGradient>
+                        <linearGradient id="landGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#22c55e"/>
+                            <stop offset="100%" stop-color="#16a34a"/>
+                        </linearGradient>
+                        <linearGradient id="atmosphereGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#60a5fa"/>
+                            <stop offset="100%" stop-color="#a78bfa"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <h1>Earthseed<span class="dot">.</span>live</h1>
+            </a>
+            <a href="/greet" class="tagline" target="_blank">small is beautiful</a>
+            <div class="header-right">
+                <button id="theme-toggle" class="theme-toggle" title="Toggle theme">
+                    <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                    <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                </button>
+                <div id="auth-container"></div>
+                <button id="new-stream-btn" class="btn btn-icon btn-primary hidden" title="New Stream">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Broadcast View (Home) -->
+        <div id="broadcast-view" class="hidden">
+            <div class="stream-info">
+                <div class="stream-header">
+                    <span class="stream-label">Stream:</span>
+                    <span id="stream-id" class="stream-id">loading...</span>
+                    <button id="copy-btn" class="copy-icon-btn" title="Copy share link">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                    </button>
+                </div>
+                <label class="require-auth-toggle">
+                    <input type="checkbox" id="require-auth-checkbox">
+                    <span><a href="#" id="viewers-link" class="viewers-link">Viewers</a> must sign in</span>
+                </label>
+                <label class="require-auth-toggle">
+                    <input type="checkbox" id="encrypt-checkbox">
+                    <span>Encrypt media end-to-end</span>
+                </label>
+                <label class="require-auth-toggle">
+                    <input type="checkbox" id="chat-checkbox">
+                    <span>Enable live chat</span>
+                </label>
+            </div>
+
+            <div class="video-chat-layout">
+                <section>
+                    <moq-publish announce="source">
+                        <video muted autoplay playsinline></video>
+                    </moq-publish>
+                </section>
+                <div id="broadcast-chat" class="chat-panel hidden"></div>
+            </div>
+        </div>
+
+        <!-- Watch View -->
+        <div id="watch-view" class="hidden">
+            <div class="video-chat-layout">
+                <section>
+                    <moq-watch muted visible="always">
+                        <canvas></canvas>
+                    </moq-watch>
+                </section>
+                <div id="watch-chat" class="chat-panel hidden"></div>
+            </div>
+        </div>
+
+        <footer>
+            <p><a href="https://moq.dev/" target="_blank" rel="noopener">MoQ</a> | <a href="https://tinymoq.com" target="_blank" rel="noopener">TinyMoQ</a> | <a href="#" id="support-link">Browser Support</a> | <a href="#" id="server-link">Server Status</a><span id="ttff-display"></span></p>
+            <div id="support-panel" class="server-panel hidden"></div>
+            <div id="server-panel" class="server-panel hidden"></div>
+        </footer>
     </div>
-  </div>
-
-  <div class="player-section">
-    <div class="section-title">Try It</div>
-    <div class="config">
-      <select id="protocol" style="background:#111;border:1px solid #1a1a1a;color:#e0e0e0;padding:10px 8px;border-radius:6px;font-size:0.9em;font-family:inherit;">
-        <option value="lite">MoQ Lite</option>
-        <option value="v14">MoQ v14</option>
-      </select>
-      <input id="relay" type="text" placeholder="Relay URL">
-      <input id="namespace" type="text" placeholder="Namespace">
-      <button onclick="play()">Play</button>
-    </div>
-    <div style="position:relative;">
-      <video id="video" autoplay muted playsinline controls></video>
-      <div id="overlay" style="display:none;position:absolute;top:0;left:0;right:0;background:rgba(0,0,0,0.85);padding:16px 20px;font-family:'SF Mono','Roboto Mono',monospace;font-size:0.75em;line-height:1.7;color:#e5e5e5;pointer-events:none;z-index:10;">
-        <div style="font-weight:700;margin-bottom:6px;font-size:1.1em;">MoQplay</div>
-        <div id="overlay-stats"></div>
-      </div>
-    </div>
-    <div class="status" id="status">Enter a relay URL and namespace to start</div>
-    <div class="stats" id="stats" style="display:none;"></div>
-  </div>
-
-  <div class="features">
-    <div class="section-title">Features</div>
-    <div class="feature-grid">
-      <div class="feature">
-        <h3>Sub-Second TTFF</h3>
-        <p>~350-550ms time-to-first-frame on nearby relays. Direct MSE rendering with no player library overhead.</p>
-      </div>
-      <div class="feature">
-        <h3>Adaptive Bitrate</h3>
-        <p>Buffer-based ABR with automatic track switching. Supports multi-rendition CMAF streams.</p>
-      </div>
-      <div class="feature">
-        <h3>Player Stats</h3>
-        <p>Press 'I' for real-time overlay: TTFF, buffer health, ABR state, framerate, dropped frames, and stale fragment tracking.</p>
-      </div>
-    </div>
-  </div>
-
-  <div class="getting-started">
-    <div class="section-title">Usage</div>
-    <div class="gs-step">
-      <h3>Embed in your page</h3>
-      <p>For <strong>MoQ Lite</strong> relays, include the namespace in the relay URL path. For <strong>MoQ v14</strong> (Cloudflare), omit it.</p>
-      <pre>&lt;video id="video" autoplay muted playsinline&gt;&lt;/video&gt;
-&lt;script src="https://moqplay.com/js/fragment-appender.js"&gt;&lt;/script&gt;
-&lt;script src="https://moqplay.com/js/moqt-player.js"&gt;&lt;/script&gt;
-&lt;script src="https://moqplay.com/js/stats.js"&gt;&lt;/script&gt;
-&lt;script&gt;
-  const video = document.getElementById('video');
-  // MoQ Lite: namespace in URL path
-  const player = new MoqtPlayer(video, 'https://relay.example.com/my-stream', 'my-stream');
-  // MoQ v14 (Cloudflare): namespace NOT in URL path
-  // const player = new MoqtPlayer(video, 'https://relay.example.com', 'my-stream');
-  player.connect();
-  video.play().catch(() =&gt; {});
-&lt;/script&gt;</pre>
-    </div>
-  </div>
-
-  <div class="footer">
-    <p>Publisher: <a href="https://github.com/erikherz/moqpush-open">moqpush</a> &middot; Player: <a href="https://github.com/erikherz/moqplay">moqplay</a></p>
-    <p style="margin-top:8px;">&copy; 2026 MoQplay &middot; <a href="mailto:erik@vivoh.com">erik@vivoh.com</a></p>
-  </div>
-
-  <script src="/js/fragment-appender.js"></script>
-  <script src="/js/moqt-player.js"></script>
-  <script>
-    let player = null;
-    let startTime = null;
-    let statsInterval = null;
-
-    // 'I' key toggles stats overlay
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'i' || e.key === 'I') {
-        const overlay = document.getElementById('overlay');
-        const stats = document.getElementById('stats');
-        const show = overlay.style.display === 'none';
-        overlay.style.display = show ? 'block' : 'none';
-        stats.style.display = show ? 'block' : 'none';
-      }
-    });
-
-    function updateOverlay() {
-      if (!player) return;
-      const overlay = document.getElementById('overlay');
-      if (overlay.style.display === 'none') return;
-
-      const s = player.getStats();
-      const video = document.getElementById('video');
-      const transport = 'WebTransport';
-      const uptime = startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
-      const fps = video.getVideoPlaybackQuality?.()?.totalVideoFrames
-        ? Math.round(video.getVideoPlaybackQuality().totalVideoFrames / (uptime || 1)) : '?';
-      const dropped = video.getVideoPlaybackQuality?.()?.droppedVideoFrames || 0;
-      const t = player.getTiming?.() || {};
-
-      const row = (label, value) => `<div style="display:flex;justify-content:space-between;"><span style="color:#888;">${label}</span><span>${value}</span></div>`;
-
-      document.getElementById('overlay-stats').innerHTML = [
-        row('Transport', `MoQT / ${transport} / MSF`),
-        row('Relay', player.relayUrl?.replace('https://', '') || '-'),
-        row('', ''),
-        row('Framerate', `${fps} fps`),
-        row('Dropped Frames', dropped),
-        row('Buffer Health', `${s.bufferHealth || '0.00'}s`),
-        row('Target Latency', `${s.targetLatency || '-'}ms`),
-        row('Session', `${uptime}s`),
-        row('Stale Drops', `V:${s.droppedStaleVideo || 0} A:${s.droppedStaleAudio || 0}`),
-        row('', ''),
-        row('ABR Ladder', s.abrLadder || '-'),
-        row('Current Track', s.abrCurrentResolution || '-'),
-        row('ABR Switches', s.abrSwitchCount ?? 0),
-        row('', ''),
-        t.setupMs != null ? row('SETUP', `${t.setupMs}ms`) : '',
-        t.catalogMs != null ? row('Catalog', `${t.catalogMs}ms`) : '',
-        t.firstFragmentMs != null ? row('1st Fragment', `${t.firstFragmentMs}ms`) : '',
-        t.firstDecodedMs != null ? row('TTFF', `${t.firstDecodedMs}ms`) : '',
-      ].filter(Boolean).join('');
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('relay')) document.getElementById('relay').value = params.get('relay');
-    if (params.get('ns')) document.getElementById('namespace').value = params.get('ns');
-    if (params.get('proto')) document.getElementById('protocol').value = params.get('proto');
-    if (params.get('relay') && params.get('ns')) play();
-
-    async function play() {
-      let protocol = document.getElementById('protocol').value;
-      const rawRelay = document.getElementById('relay').value.trim().replace(/\/+$/, '');
-      const namespace = document.getElementById('namespace').value.trim();
-      const status = document.getElementById('status');
-      const video = document.getElementById('video');
-
-      if (!rawRelay || !namespace) {
-        status.textContent = 'Enter a relay URL and namespace';
-        return;
-      }
-
-      // Warn on likely protocol mismatch
-      const isCloudflare = rawRelay.includes('cloudflare') || rawRelay.includes('mediaovertquic');
-      if (isCloudflare && protocol === 'lite') {
-        if (!confirm('This looks like a Cloudflare relay, which uses MoQ v14.\n\nSwitch to MoQ v14?')) return;
-        document.getElementById('protocol').value = 'v14';
-        protocol = 'v14';
-      } else if (!isCloudflare && protocol === 'v14' && !rawRelay.includes('localhost')) {
-        if (!confirm('This relay may use MoQ Lite. Proceed with MoQ v14 anyway?')) return;
-      }
-
-      // MoQ Lite: namespace goes in URL path (relay root), SUBSCRIBE uses empty broadcast
-      // MoQ v14:  namespace stays out of URL, SUBSCRIBE includes it in the message
-      const relayUrl = protocol === 'lite'
-        ? rawRelay + '/' + encodeURIComponent(namespace)
-        : rawRelay;
-
-      if (statsInterval) { clearInterval(statsInterval); statsInterval = null; }
-      if (player) { player.destroy(); player = null; }
-      status.textContent = 'Connecting...';
-
-      try {
-        player = new MoqtPlayer(
-          video,
-          relayUrl,
-          namespace,
-          { onStatus: (msg) => { status.textContent = msg; } },
-        );
-        await player.connect();
-        status.textContent = 'Playing';
-        startTime = Date.now();
-        video.play().catch(() => {});
-        document.getElementById('overlay').style.display = 'none';
-        document.getElementById('stats').style.display = 'none';
-
-        statsInterval = setInterval(() => {
-          updateOverlay();
-          if (!player) return;
-          const s = player.getStats();
-          const transport = 'WebTransport';
-          document.getElementById('stats').innerHTML = [
-            `Transport: ${transport}`,
-            `Buffer: ${s.bufferHealth}s`,
-            `ABR: ${s.abrCurrentResolution || '-'} (${s.abrState})`,
-          ].filter(Boolean).join(' &nbsp;|&nbsp; ');
-        }, 1000);
-      } catch (e) {
-        status.textContent = `Error: ${e.message}`;
-      }
-    }
-  </script>
 </body>
 </html>

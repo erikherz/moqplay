@@ -17,9 +17,10 @@
 // everywhere, `exp` in unix SECONDS. Signing input is base64url(header) + "." +
 // base64url(payload); the token is that + "." + base64url(signature).
 
-// Earthseed's Ed25519 key id (RFC 7638 JWK thumbprint) — fallback if the private JWK
-// secret omits its own `kid`. The relay selects the verifying key by this kid.
-export const MOQ_KID = "X3KzNJpRvVarbKBM2mk_M5JGt0dDYu85ZA5z2nLb1Qk";
+// MoQplay's Ed25519 key id (RFC 7638 JWK thumbprint) — fallback if the private JWK
+// secret omits its own `kid`. The relay selects the verifying key by this kid; it must
+// match the `kid` on MoQplay's registered verify_jwk.
+export const MOQ_KID = "guAuLGEyCksxcThOpOD5xvlCBfrwHEDkUc7n8fOXDHU";
 // Managed HS256 mode: the relay has the per-stream key and ignores `kid`; keep it
 // constant so tokens stay identical to the moq-token-cli tooling.
 const HS256_KID = "9309ffde64e0bf0f";

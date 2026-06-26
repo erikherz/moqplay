@@ -873,7 +873,7 @@ function initBroadcastView(streamId: string, user: User | null) {
   const streamName = `${NAMESPACE_PREFIX}/${streamId}.hang`;
   const shareUrl = `${window.location.origin}/${streamId}`;
 
-  console.log(`Earthseed Broadcast - Stream: ${streamId}`);
+  console.log(`MoQplay Broadcast - Stream: ${streamId}`);
 
   // Show broadcast view, hide watch view
   document.getElementById("broadcast-view")?.classList.remove("hidden");
@@ -1396,7 +1396,7 @@ async function initWatchView(streamId: string, user: User | null) {
   // undefined and the viewer only fetches catalog.json, never video/hd).
   const streamName = `${NAMESPACE_PREFIX}/${streamId}.hang`;
 
-  console.log(`Earthseed Watch - Stream: ${streamId}`);
+  console.log(`MoQplay Watch - Stream: ${streamId}`);
 
   // Show watch view, hide broadcast view
   document.getElementById("watch-view")?.classList.remove("hidden");
@@ -1638,7 +1638,7 @@ async function initWatchView(streamId: string, user: User | null) {
 
 // Initialize stats view
 async function initStatsView(user: User | null) {
-  console.log("Earthseed Stats");
+  console.log("MoQplay Stats");
 
   // Hide broadcast and watch views
   document.getElementById("broadcast-view")?.classList.add("hidden");
@@ -1798,7 +1798,7 @@ async function initStatsView(user: User | null) {
 
 // Initialize stream-specific stats view (viewers only)
 async function initStreamStatsView(streamId: string) {
-  console.log(`Earthseed Stream Stats - Stream: ${streamId}`);
+  console.log(`MoQplay Stream Stats - Stream: ${streamId}`);
 
   // Hide broadcast and watch views
   document.getElementById("broadcast-view")?.classList.add("hidden");
@@ -1910,7 +1910,7 @@ async function initStreamStatsView(streamId: string) {
 
 // Initialize stats map view (all viewers on a map)
 async function initStatsMapView(user: User | null) {
-  console.log("Earthseed Stats Map");
+  console.log("MoQplay Stats Map");
 
   // Hide broadcast and watch views
   document.getElementById("broadcast-view")?.classList.add("hidden");
@@ -2030,7 +2030,7 @@ async function initStatsMapView(user: User | null) {
 
 // Initialize stream-specific stats map view (viewers for one stream on a map)
 async function initStreamStatsMapView(streamId: string) {
-  console.log(`Earthseed Stream Stats Map - Stream: ${streamId}`);
+  console.log(`MoQplay Stream Stats Map - Stream: ${streamId}`);
 
   // Hide broadcast and watch views
   document.getElementById("broadcast-view")?.classList.add("hidden");
@@ -2122,7 +2122,7 @@ async function initStreamStatsMapView(streamId: string) {
 
 // Initialize greet view (broadcasters only map - public)
 async function initGreetView() {
-  console.log("Earthseed Greet - Live Broadcasters");
+  console.log("MoQplay Greet - Live Broadcasters");
 
   // Hide broadcast and watch views
   document.getElementById("broadcast-view")?.classList.add("hidden");
@@ -2235,7 +2235,7 @@ async function initGreetView() {
 
 // Initialize admin view
 function initAdminView() {
-  console.log("Earthseed Admin Panel");
+  console.log("MoQplay Admin Panel");
 
   // Hide broadcast and watch views
   document.getElementById("broadcast-view")?.classList.add("hidden");

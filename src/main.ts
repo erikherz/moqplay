@@ -618,7 +618,7 @@ function createSecurityDetails(): HTMLSpanElement {
   pop.innerHTML =
     `<strong style="color:#f3f4f6;display:block;margin-bottom:6px;">What encryption does and doesn't cover</strong>` +
     `<ul style="margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px;">` +
-    `<li><strong>No live revocation.</strong> The per-session key is static — a viewer removed mid-stream who kept the key can keep decrypting, and saved recordings stay decryptable.</li>` +
+    `<li><strong>No live revocation.</strong> The per-session key is static — a viewer removed mid-stream who kept the key can keep decrypting until this broadcast ends (the next session uses a fresh key).</li>` +
     `<li><strong>Metadata in the clear.</strong> Codec, resolution, frame timing and sizes, and track names are visible to the relay.</li>` +
     `<li><strong>Not DRM.</strong> Anyone allowed to watch can screen-capture the decoded video.</li>` +
     `</ul>`;

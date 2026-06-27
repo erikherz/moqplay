@@ -266,11 +266,12 @@ Flow (`src/main.ts`):
 
 ## 9. Limitations & v2
 
-- **No live revocation.** The per-session key is static. A viewer removed
-  mid-broadcast who kept the key can still decrypt the ongoing stream, and a saved
-  ciphertext recording can be decrypted with the key. Live decryption-revocation
-  requires key rotation + redistribution (SFrame/MLS territory) — out of scope for
-  v1.
+- **No live revocation / no forward secrecy.** The per-session key is static. A
+  viewer removed mid-broadcast who kept the key can still decrypt the ongoing stream
+  until it ends (the next session re-keys). MoQplay stores no recording, but the key
+  has no forward secrecy: anyone who *independently* captured the ciphertext could
+  decrypt it later with the same key. Live decryption-revocation requires key
+  rotation + redistribution (SFrame/MLS territory) — out of scope for v1.
 - **Not DRM.** Authorized viewers can capture decoded frames.
 - **Catalog metadata is in the clear** (codec/resolution) — see [§6](#6-what-stays-in-the-clear-and-why).
 - **Legacy container only.** The seams target the legacy container (the live default).

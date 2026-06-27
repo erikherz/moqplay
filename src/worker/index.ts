@@ -13,7 +13,7 @@ import {
   clearSessionCookie,
   getSessionFromCookie,
 } from "./auth/session";
-import { mintEd25519Token, mintHs256Token, type MoqClaims } from "./auth/moq-token";
+import { mintEd25519Token, mintHs256Token, publicVerifyJwk, type MoqClaims } from "./auth/moq-token";
 
 // Per-stream live chat Durable Object (WebSocket hibernation). Re-exported so wrangler
 // can bind it; see wrangler.jsonc durable_objects + migrations.
@@ -111,6 +111,21 @@ async function handleApiRoutes(
   url: URL
 ): Promise<Response> {
   try {
+    // GET /api/pubkey — the PUBLIC verify JWK for this deployment's BYOK signing key, as
+    // plain JSON, for an operator to paste into their CDN console as moqplay's verify_jwk.
+    // Public material only; the private half (MOQ_AUTH_PRIVATE_JWK) is never exposed here.
+    if (request.method === "GET" && url.pathname === "/api/pubkey") {
+      if (!env.MOQ_AUTH_PRIVATE_JWK) {
+        return new Response("signing key not configured", { status: 503 });
+      }
+      try {
+        return Response.json(publicVerifyJwk(env.MOQ_AUTH_PRIVATE_JWK));
+      } catch (e) {
+        console.error("/api/pubkey:", e);
+        return new Response("invalid signing key", { status: 500 });
+      }
+    }
+
     // Provider-specific routes
     if (url.pathname.startsWith("/api/auth/google/")) {
       return handleProviderAuth(request, env, url, "google");

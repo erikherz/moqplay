@@ -112,33 +112,33 @@ prompted to paste the value):
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | from §3 |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | from §3 |
 | `SESSION_SECRET` | signs user session cookies | `openssl rand -base64 32` |
-| `MOQ_AUTH_PRIVATE_JWK` | your Ed25519 **BYOK** signing key (JSON) | generate below |
+| `MOQ_AUTH_PRIVATE_JWK` | your Ed25519 **BYOK** signing key (JSON) | `npm run keygen` (below) |
 | `TINYMOQ_PROVISION_KEY` | bearer token for your relay's `/assign` API | from your relay backend (§6) |
 | `RESOLVE_KEY` | *(optional)* enterprise on-net relay resolution | from your relay backend |
 
 ### Generate the BYOK key pair
 
 The Worker signs each relay token with **your own** Ed25519 private key; the relay only
-ever holds the matching **public** key. Generate a fresh pair (Node 20+):
+ever holds the matching **public** key. One command does it (it's idempotent — skips if a
+key already exists, so it's safe to run at install):
 
-```js
-// save as gen-moq-key.mjs, then: node gen-moq-key.mjs
-import { webcrypto as c } from "node:crypto";
-
-const { publicKey, privateKey } = await c.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]);
-const pub  = await c.subtle.exportKey("jwk", publicKey);
-const priv = await c.subtle.exportKey("jwk", privateKey);
-
-// RFC 7638 JWK thumbprint (the kid the relay selects the verify key by)
-const thumb = JSON.stringify({ crv: pub.crv, kty: pub.kty, x: pub.x });
-const digest = await c.subtle.digest("SHA-256", new TextEncoder().encode(thumb));
-const kid = Buffer.from(new Uint8Array(digest)).toString("base64url");
-pub.kid = kid; priv.kid = kid;
-
-console.log("kid:", kid);
-console.log("\nPUBLIC JWK — register this with your relay:\n" + JSON.stringify(pub));
-console.log("\nPRIVATE JWK — set as the MOQ_AUTH_PRIVATE_JWK secret:\n" + JSON.stringify(priv));
+```bash
+npm run keygen      # generates if absent, sets the MOQ_AUTH_PRIVATE_JWK secret,
+                    # and prints ONLY the public verify JWK (the private half is never printed)
 ```
+
+It stores the **private** half as the `MOQ_AUTH_PRIVATE_JWK` Cloudflare secret and prints
+the **public verify JWK** to stdout — paste that into your relay/CDN console (§6b). To
+rotate later, `npm run keygen -- --force` (then re-register the new public key).
+
+You can re-print the public verify JWK anytime from the running Worker:
+
+```bash
+curl https://yourdomain.com/api/pubkey
+```
+
+`/api/pubkey` derives the public JWK from the configured signing key and returns it as plain
+JSON. It only ever exposes public material — never the private half.
 
 - Set the **private** JWK (the line with `"d"`) as the `MOQ_AUTH_PRIVATE_JWK` secret.
 - Give the **public** JWK (plus its `kid`) to your relay so it can verify your tokens

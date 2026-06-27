@@ -55,11 +55,10 @@ TINYMOQ_PROVISION_KEY  = <provisioning bearer you choose:  openssl rand -hex 24>
 MOQ_AUTH_PRIVATE_JWK   = <your Ed25519 private JWK>   # signing; never leaves moqplay
 ```
 
-You also need the **public** half of that keypair, exported as a JWK (with its `kid`), to
-register on the fleet. If you've deployed moqplay you already have it; otherwise generate
-the pair with the Node script in
-[cloudflare-install.md §4](./cloudflare-install.md#generate-the-byok-key-pair) (or TinyMoQ's
-`moq-token-cli generate`): private JWK → `MOQ_AUTH_PRIVATE_JWK`, public JWK → `verify_jwk` below.
+You also need the **public** half of that keypair, as a JWK (with its `kid`), to register on
+the fleet. `npm run keygen` generates the pair if absent — it sets `MOQ_AUTH_PRIVATE_JWK`
+and prints the **public verify JWK** (never the private half); paste that into `verify_jwk`
+below. To fetch it again from a running moqplay: `curl https://<moqplay>/api/pubkey`.
 
 ### On the fleet box — register moqplay as a customer
 
@@ -126,9 +125,10 @@ MOQ_AUTH_PRIVATE_JWK   = <your Ed25519 private JWK>    # unchanged — BYOK as a
 ```
 
 Get `FLEET_ENDPOINT` + the customer token from the operator's **cdnadmin connection-details**
-when they register you. Your **BYOK keypair stays as-is** — the operator already pushed your
-public `verify_jwk` to the boxes when they registered you, so there is **no `customers.json`
-edit for you to do**.
+when they register you. At registration you give them your **public verify JWK**
+(`curl https://<moqplay>/api/pubkey`, or the printed output of `npm run keygen`); they push
+it to the boxes. Your **BYOK keypair otherwise stays as-is**, and there is **no
+`customers.json` edit for you to do**.
 
 ### What happens at go-live
 

@@ -67,6 +67,35 @@ export async function mintEd25519Token(privateJwk: string, claims: MoqClaims): P
   return sign(header, claims, (input) => crypto.subtle.sign(ED25519, key, input));
 }
 
+// The PUBLIC verify JWK for our BYOK signing key — what an operator installs/pastes as the
+// relay's verify_jwk. Returns ONLY public material (the `x` coordinate is public; the
+// private `d` is dropped), so this is safe to expose. The `kid` matches what
+// mintEd25519Token() stamps on tokens (jwk.kid ?? MOQ_KID), so the relay selects this key.
+export interface PublicVerifyJwk {
+  kty: "OKP";
+  crv: "Ed25519";
+  x: string;
+  alg: "EdDSA";
+  use: "sig";
+  key_ops: ["verify"];
+  kid: string;
+}
+export function publicVerifyJwk(privateJwk: string): PublicVerifyJwk {
+  const jwk = JSON.parse(privateJwk) as { kty?: string; crv?: string; x?: string; kid?: string };
+  if (jwk.kty !== "OKP" || jwk.crv !== "Ed25519" || !jwk.x) {
+    throw new Error("MOQ_AUTH_PRIVATE_JWK is not an Ed25519 (OKP) JWK");
+  }
+  return {
+    kty: "OKP",
+    crv: "Ed25519",
+    x: jwk.x, // public coordinate only — never the private `d`
+    alg: "EdDSA",
+    use: "sig",
+    key_ops: ["verify"],
+    kid: jwk.kid ?? MOQ_KID,
+  };
+}
+
 // Managed: sign with a per-stream HMAC secret (base64url "k") returned by /assign.
 export async function mintHs256Token(secretK: string, claims: MoqClaims): Promise<string> {
   const key = await crypto.subtle.importKey(

@@ -150,9 +150,11 @@ server. The shims are small and well-bounded:
    **same set as Cloudflare**: `FLEET_ENDPOINT` (the fleet base URL — on Cloudflare it's a
    `wrangler.jsonc` var; here it's just an env value), `GOOGLE_CLIENT_ID`,
    `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `MOQ_AUTH_PRIVATE_JWK`, `TINYMOQ_PROVISION_KEY`
-   (and `RESOLVE_KEY` if you use the enterprise path). Generate the key/secret values as in
-   [cloudflare-install.md §4](./cloudflare-install.md#4-generate-the-secrets); reuse the
-   same values as your Cloudflare deployment if you want them to share a relay tenant + key.
+   (and `RESOLVE_KEY` if you use the enterprise path). Generate the BYOK signing key straight
+   into the env file with `npm run keygen -- --out-env /etc/moqplay/moqplay.env` — it writes
+   `MOQ_AUTH_PRIVATE_JWK` (chmod 600, never printed) and prints the public verify JWK to give
+   your relay. Reuse the same values as a Cloudflare deployment if you want them to share a
+   relay tenant + key.
 
 Build the frontend once and on every update:
 

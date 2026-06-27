@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "vite build && wrangler deploy",
+    "keygen": "node scripts/moq-keygen.mjs",
     "cf-typegen": "wrangler types"
   },
   "devDependencies": {

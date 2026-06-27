@@ -57,6 +57,10 @@ The Worker is the only managed piece. The relays are supplied by whatever CDN yo
 
 ## Deploy your own
 
+> **Full walkthrough:** [**cloudflare-install.md**](./cloudflare-install.md) is the
+> complete step-by-step guide (D1 setup, OAuth, generating the BYOK key, the relay
+> backend). The summary below is the overview.
+
 ### Requirements
 
 - **Cloudflare account** (Workers, D1, Durable Objects)
@@ -166,6 +170,7 @@ Each stream ID maps to a unique namespace (`yourdomain.com/{streamId}.hang`) on 
 ## Links
 
 - [moqplay.com](https://moqplay.com) — reference deployment
+- [cloudflare-install.md](./cloudflare-install.md) — step-by-step deploy guide
 - [TinyMoQ](https://tinymoq.com) — relay CDN
 - [MoQ Protocol](https://moq.dev/)
 - [Cloudflare MoQ Docs](https://developers.cloudflare.com/moq/)

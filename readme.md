@@ -6,7 +6,7 @@ The reference deployment runs at **[moqplay.com](https://moqplay.com)** — but 
 
 ## What you get
 
-- **Ultra-low-latency live video** in the browser using the [@kixelated/hang](https://www.npmjs.com/package/@kixelated/hang) web components (IETF MoQ Transport, draft-07).
+- **Ultra-low-latency live video** in the browser using the [@moq](https://www.npmjs.com/org/moq) (`@moq/publish` / `@moq/watch`) web components over the MoQ `moq-lite-04` transport.
 - **One-command Cloudflare deploy** — the app is a single Cloudflare Worker that serves the static frontend *and* runs the API (auth, stream provisioning, relay-token minting).
 - **Your domain, your branding** — change a couple of config values and it's your product, not MoQplay.
 - **Relay-blind end-to-end encryption** — media is encrypted in the browser; the relay only ever forwards ciphertext it can't read (see [MEDIA-ENCRYPTION.md](./MEDIA-ENCRYPTION.md)).
@@ -45,13 +45,23 @@ The Worker is the only managed piece. The relays are supplied by whatever CDN yo
 
 ## Tech stack
 
-- **Frontend**: Vite + `@kixelated/hang@0.3.12` web components
+- **Frontend**: Vite + `@moq/publish` / `@moq/watch` web components (`<moq-publish>` / `<moq-watch>`)
 - **Backend**: Cloudflare Workers, D1 (stream metadata), Durable Objects (`ChatRoom` chat)
 - **Auth**: Google OAuth + signed sessions
-- **Protocol**: IETF MoQ Transport draft-07
+- **Protocol**: MoQ `moq-lite-04` (negotiated by `@moq/net`)
 - **Relay tokens**: Ed25519 BYOK (own tenant key id)
 
-> **Version pin:** This project uses `@kixelated/hang@0.3.12` for compatibility with draft-07 relays. Newer versions (0.4+) use draft-14 and won't interoperate.
+> **Version pin:** The `@moq/*` deps are pinned to exact versions (`@moq/publish@0.2.15`,
+> `@moq/watch@0.2.17`, `@moq/web-transport-ws@0.1.2`), and `package.json` `overrides` lock
+> the patch-critical transitive deps (`@moq/net@0.1.5`, `@moq/hang@0.2.11`). This is
+> deliberate: the build-time media-crypto patch in `vite.config.ts` matches source strings
+> in `@moq/net` (`track.js`) and `@moq/hang` (`container/legacy.js`, `consumer.js`), and the
+> wire protocol (`moq-lite-04`) must match the relay. A version bump is safe only when the
+> patch still applies (the build fails closed if a seam moves) **and** the relay speaks the
+> same protocol — so upgrade the app and relay together, not independently.
+>
+> The legacy `@kixelated/hang` package is **deprecated** (it was renamed to `@moq/hang` and
+> split into `@moq/publish` / `@moq/watch`); MoQplay already uses the current `@moq/*` packages.
 
 ---
 

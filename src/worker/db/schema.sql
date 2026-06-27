@@ -68,8 +68,10 @@ CREATE TABLE IF NOT EXISTS streams (
   require_auth INTEGER DEFAULT 0,
   -- Broadcaster-supplied HTML overlay rendered over the player.
   overlay_html TEXT DEFAULT '',
-  -- Relay-blind E2E media encryption opt-in (1 = encrypt payload, AES-GCM).
-  encrypted INTEGER DEFAULT 0,
+  -- Relay-blind E2E media encryption. MANDATORY for every stream (AES-GCM payload):
+  -- the go-live path always mints a content key regardless of this column, which is
+  -- retained for history but no longer authoritative. Defaults to 1 for honesty.
+  encrypted INTEGER DEFAULT 1,
   -- Live chat opt-in (1 = chat enabled; messages flow via the ChatRoom Durable Object).
   chat_enabled INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now')),

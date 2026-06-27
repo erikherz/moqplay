@@ -408,7 +408,7 @@ async function handleStreamRoutes(
       stream_id: streamId,
       require_auth: stream?.require_auth === 1,
       overlay_html: stream?.overlay_html || "",
-      encrypted: stream?.encrypted === 1,
+      encrypted: true, // mandatory for every stream; the column is retained but no longer authoritative
       chat_enabled: stream?.chat_enabled === 1,
     });
   }
@@ -981,16 +981,13 @@ async function handleStatsRoutes(
     const relayHost = assigned?.host ?? null;
     const relayPort = assigned?.port ?? null;
 
-    // Relay-blind E2E media encryption (opt-in per stream). When on, mint a fresh
-    // per-broadcast content key, store it on the broadcast row (so authorized
-    // viewers get the SAME key via /route), and return it to the publisher. This
-    // is a SEPARATE secret from the relay JWT-signing key and never goes to the relay.
-    const streamRow = await env.DB
-      .prepare("SELECT encrypted FROM streams WHERE stream_id = ?")
-      .bind(body.stream_id)
-      .first<{ encrypted: number }>();
-    const encrypted = streamRow?.encrypted === 1;
-    const contentKey = encrypted ? generateContentKey() : null;
+    // Relay-blind E2E media encryption is MANDATORY for every stream — the guarantee we
+    // sell is that the relay/server only ever move ciphertext, so it cannot be opted out
+    // of. Mint a fresh per-broadcast content key unconditionally, store it on the
+    // broadcast row (so authorized viewers get the SAME key via /route), and return it to
+    // the publisher. SEPARATE secret from the relay JWT-signing key; never goes to the relay.
+    const encrypted = true;
+    const contentKey = generateContentKey();
 
     const result = await env.DB
       .prepare(`

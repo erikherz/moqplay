@@ -554,20 +554,83 @@ function setActiveRelay(relay: string | null) {
   updateServerStatusPanel();
 }
 
-// A small "🔒 Encrypted" pill shown in the publisher and player views when the
-// stream uses relay-blind E2E media encryption. Purely informational.
-function createEncryptionBadge(): HTMLSpanElement {
+// Status pills shown in the publisher header and on the player. We make a claim at each
+// layer and nothing more: "Relay-blind" is an INFRASTRUCTURE property (encryption is
+// mandatory, so it shows on every stream and says nothing about who may watch); the
+// audience pill carries the ACCESS claim (Public vs Invite-only); and "Security details"
+// hangs the honest caveats (static key, metadata, not-DRM) off the access affordance.
+const SHIELD_SVG = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>`;
+const GLOBE_SVG = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+const LOCK_SVG = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>`;
+const PILL_CSS =
+  "display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:600;" +
+  "border:1px solid;border-radius:999px;padding:2px 8px;line-height:1;white-space:nowrap;";
+
+// "Relay-blind" — shown on EVERY stream (encryption is mandatory). States that the relay
+// and server only ever move ciphertext they can't read. Deliberately NOT a privacy claim
+// about who may watch — that is the audience pill's job.
+function createRelayBlindBadge(): HTMLSpanElement {
   const badge = document.createElement("span");
-  badge.className = "encryption-badge";
-  badge.title = "End-to-end encrypted — the relay only forwards ciphertext it cannot read";
-  badge.innerHTML =
-    `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>` +
-    `<span>Encrypted</span>`;
-  badge.style.cssText =
-    "display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:600;" +
-    "color:#22c55e;border:1px solid rgba(34,197,94,0.5);border-radius:999px;padding:2px 8px;" +
-    "line-height:1;white-space:nowrap;";
+  badge.className = "relay-blind-badge";
+  badge.title = "Encrypted in your browser, decrypted in viewers' browsers. The relay and server only move ciphertext they can't read.";
+  badge.innerHTML = SHIELD_SVG + `<span>Relay-blind</span>`;
+  badge.style.cssText = PILL_CSS + "color:#22c55e;border-color:rgba(34,197,94,0.5);";
   return badge;
+}
+
+// Audience pill — carries the ACCESS claim, driven by require_auth. Public = anyone with
+// the link; Invite-only = viewers must sign in to receive the key. Mutated in place so a
+// single element can track the live toggle.
+function setAudienceBadge(badge: HTMLSpanElement, inviteOnly: boolean): void {
+  const color = inviteOnly ? "#f59e0b" : "#9ca3af";
+  badge.title = inviteOnly
+    ? "Invite-only — viewers must sign in to receive the key and watch."
+    : "Public — anyone with the link can watch.";
+  badge.innerHTML = (inviteOnly ? LOCK_SVG : GLOBE_SVG) + `<span>${inviteOnly ? "Invite-only" : "Public"}</span>`;
+  badge.style.color = color;
+  badge.style.borderColor = color;
+}
+
+function createAudienceBadge(inviteOnly: boolean): HTMLSpanElement {
+  const badge = document.createElement("span");
+  badge.className = "audience-badge";
+  badge.style.cssText = PILL_CSS;
+  setAudienceBadge(badge, inviteOnly);
+  return badge;
+}
+
+// "Security details" disclosure — the honest caveats that attach to the access claim,
+// surfaced at the moment a user reasons about privacy. Click toggles a small popover;
+// an outside click closes it.
+function createSecurityDetails(): HTMLSpanElement {
+  const wrap = document.createElement("span");
+  wrap.className = "security-details";
+  wrap.style.cssText = "position:relative;display:inline-flex;align-items:center;";
+  const link = document.createElement("a");
+  link.href = "#";
+  link.textContent = "Security details";
+  link.style.cssText = "font-size:0.72rem;color:#9ca3af;text-decoration:underline;cursor:pointer;white-space:nowrap;";
+  const pop = document.createElement("div");
+  pop.style.cssText =
+    "display:none;position:absolute;z-index:60;top:calc(100% + 6px);left:0;width:290px;" +
+    "background:#1a1a1a;border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 12px;" +
+    "font-size:0.72rem;line-height:1.45;color:#d1d5db;box-shadow:0 8px 28px rgba(0,0,0,0.55);text-align:left;";
+  pop.innerHTML =
+    `<strong style="color:#f3f4f6;display:block;margin-bottom:6px;">What encryption does and doesn't cover</strong>` +
+    `<ul style="margin:0;padding-left:16px;display:flex;flex-direction:column;gap:6px;">` +
+    `<li><strong>No live revocation.</strong> The per-session key is static — a viewer removed mid-stream who kept the key can keep decrypting, and saved recordings stay decryptable.</li>` +
+    `<li><strong>Metadata in the clear.</strong> Codec, resolution, frame timing and sizes, and track names are visible to the relay.</li>` +
+    `<li><strong>Not DRM.</strong> Anyone allowed to watch can screen-capture the decoded video.</li>` +
+    `</ul>`;
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    pop.style.display = pop.style.display === "none" ? "block" : "none";
+  });
+  document.addEventListener("click", (e) => {
+    if (!wrap.contains(e.target as Node)) pop.style.display = "none";
+  });
+  wrap.append(link, pop);
+  return wrap;
 }
 
 // Per-broadcast relay tokens are minted server-side (BYOK) and returned by the Worker:
@@ -610,7 +673,7 @@ import {
   type LiveViewer,
   type StreamRoute
 } from "./auth";
-import { armPublisher, armViewer, setMediaKey, resetMediaKey, clearMediaCrypto } from "./crypto/media-crypto";
+import { armPublisher, armViewer, setMediaKey, resetMediaKey } from "./crypto/media-crypto";
 import { initChat, type ChatHandle } from "./chat/chat-client";
 import { createCompositor, type Compositor } from "./media/pip-compositor";
 
@@ -906,16 +969,38 @@ function initBroadcastView(streamId: string, user: User | null) {
     });
   }
 
-  // Tracks whether this stream uses relay-blind E2E media encryption (loaded from
-  // settings). goLive reads it to require + install the content key before connecting.
-  let streamEncrypted = false;
+  // Relay-blind E2E media encryption is MANDATORY for every stream — there is no opt-out.
+  // Arm the publisher at page load, BEFORE any frame is encoded, so nothing is ever
+  // published in the clear; the content key arrives at go-live and releases the queued
+  // frames. `streamEncrypted` is always true so goLive requires + installs the key.
+  const streamEncrypted = true;
+  armPublisher();
 
-  // Require auth toggle
+  // Stream-header indicators. "Relay-blind" is shown unconditionally — it states an
+  // INFRASTRUCTURE property (the relay/server only ever move ciphertext), NOT who may
+  // watch. The audience pill ("Public" / "Invite-only") carries the access claim and
+  // tracks the live require-auth state below.
+  let audienceBadge: HTMLSpanElement | null = null;
+  const streamHeaderEl = document.querySelector(".stream-header");
+  if (streamHeaderEl) {
+    streamHeaderEl.appendChild(createRelayBlindBadge());
+    audienceBadge = createAudienceBadge(false);
+    audienceBadge.style.marginLeft = "6px";
+    streamHeaderEl.appendChild(audienceBadge);
+  }
+
+  // Require auth toggle (Public vs Invite-only). Toggling re-keys the audience pill and
+  // the viewer-facing access policy; the security-details disclosure (key/metadata
+  // caveats) is attached next to this control.
   const requireAuthCheckbox = document.getElementById("require-auth-checkbox") as HTMLInputElement;
   if (requireAuthCheckbox) {
+    // The honest caveats live right next to the access affordance.
+    requireAuthCheckbox.closest("label")?.after(createSecurityDetails());
+
     // Load current setting
     getStreamSettings(streamId).then(settings => {
       requireAuthCheckbox.checked = settings.require_auth;
+      if (audienceBadge) setAudienceBadge(audienceBadge, settings.require_auth);
     });
 
     // Save on change - with confirmation for anonymous viewers
@@ -939,35 +1024,8 @@ function initBroadcastView(streamId: string, user: User | null) {
         }
       }
 
+      if (audienceBadge) setAudienceBadge(audienceBadge, requireAuthCheckbox.checked);
       updateStreamSettings(streamId, { require_auth: requireAuthCheckbox.checked });
-    });
-  }
-
-  // Relay-blind E2E media encryption toggle. Arm the publisher as soon as we know
-  // the stream is encrypted — at page load, BEFORE any frame is encoded — so nothing
-  // is ever published in the clear. The content key arrives at go-live and releases
-  // the frames the armed publisher has been queuing. See src/crypto/media-crypto.ts.
-  const encryptCheckbox = document.getElementById("encrypt-checkbox") as HTMLInputElement;
-  if (encryptCheckbox) {
-    // "🔒 Encrypted" indicator in the stream header, reflecting the live toggle state.
-    const encBadge = createEncryptionBadge();
-    encBadge.style.display = "none";
-    document.querySelector(".stream-header")?.appendChild(encBadge);
-    const reflectBadge = (on: boolean) => { encBadge.style.display = on ? "inline-flex" : "none"; };
-
-    getStreamSettings(streamId).then(settings => {
-      encryptCheckbox.checked = settings.encrypted;
-      streamEncrypted = settings.encrypted;
-      reflectBadge(settings.encrypted);
-      if (settings.encrypted) armPublisher();
-    });
-
-    encryptCheckbox.addEventListener("change", () => {
-      streamEncrypted = encryptCheckbox.checked;
-      reflectBadge(encryptCheckbox.checked);
-      if (encryptCheckbox.checked) armPublisher();
-      else clearMediaCrypto();
-      updateStreamSettings(streamId, { encrypted: encryptCheckbox.checked });
     });
   }
 
@@ -1519,15 +1577,23 @@ async function initWatchView(streamId: string, user: User | null) {
       }
       armViewer();
       await setMediaKey(routeInfo.contentKey);
-      // "🔒 Encrypted" badge overlaid on the player.
+      // Player overlay: "Relay-blind" (always) + the audience pill. When the stream is
+      // invite-only, attach the security-details disclosure so the key/metadata caveats
+      // are visible right where a viewer forms a privacy expectation.
       const sec = document.querySelector("#watch-view section") as HTMLElement | null;
       if (sec) {
         if (!sec.style.position) sec.style.position = "relative";
-        const badge = createEncryptionBadge();
-        badge.style.cssText +=
-          "position:absolute;top:10px;right:10px;z-index:5;color:#4ade80;" +
-          "background:rgba(0,0,0,0.55);border-color:rgba(74,222,128,0.6);";
-        sec.appendChild(badge);
+        const overlay = document.createElement("div");
+        overlay.style.cssText =
+          "position:absolute;top:10px;right:10px;z-index:5;display:flex;align-items:center;" +
+          "gap:8px;background:rgba(0,0,0,0.6);border-radius:999px;padding:4px 10px;";
+        const rb = createRelayBlindBadge();
+        rb.style.border = "none"; rb.style.padding = "0";
+        const aud = createAudienceBadge(settings.require_auth);
+        aud.style.border = "none"; aud.style.padding = "0";
+        overlay.append(rb, aud);
+        if (settings.require_auth) overlay.append(createSecurityDetails());
+        sec.appendChild(overlay);
       }
     }
     if (routeInfo.mode === "enterprise") {

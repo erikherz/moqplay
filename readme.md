@@ -59,9 +59,9 @@ The Worker is the only managed piece. The relays are supplied by whatever CDN yo
 
 > **Full walkthroughs:** [**cloudflare-install.md**](./cloudflare-install.md) is the
 > complete step-by-step guide for the managed (Cloudflare) path — D1 setup, OAuth,
-> generating the BYOK key, the relay backend. To run the entire stack (app + DB + chat +
-> relay) on a single Ubuntu VM instead, see [**ubuntu-install.md**](./ubuntu-install.md).
-> The summary below is the overview.
+> generating the BYOK key, the relay backend. To run the web app (app + DB + chat) on a
+> single Ubuntu VM instead of Workers — pointing at the same relay backend — see
+> [**ubuntu-install.md**](./ubuntu-install.md). The summary below is the overview.
 
 ### Requirements
 
@@ -173,7 +173,7 @@ Each stream ID maps to a unique namespace (`yourdomain.com/{streamId}.hang`) on 
 
 - [moqplay.com](https://moqplay.com) — reference deployment
 - [cloudflare-install.md](./cloudflare-install.md) — step-by-step deploy guide (managed / Cloudflare)
-- [ubuntu-install.md](./ubuntu-install.md) — single-box self-host guide (whole stack on one VM)
+- [ubuntu-install.md](./ubuntu-install.md) — run the web app on a single Ubuntu VM (same relay backend)
 - [TinyMoQ](https://tinymoq.com) — relay CDN
 - [MoQ Protocol](https://moq.dev/)
 - [Cloudflare MoQ Docs](https://developers.cloudflare.com/moq/)

@@ -1,47 +1,48 @@
-# Self-hosting MoQplay on a single Ubuntu VM
+# Self-hosting the MoQplay web app on a single Ubuntu VM
 
 This is the single-box alternative to [cloudflare-install.md](./cloudflare-install.md). It
-takes one clean Ubuntu server and runs the **whole stack** — app, database, chat, and the
-MoQ relay — on that one machine. No Cloudflare account required.
+runs the **MoQplay web app** — the exact tier Cloudflare hosts — on one Ubuntu server
+instead of on Workers. It points at the **same relay backend** the Cloudflare deployment
+uses; the relay is not part of this box (just as it isn't part of the Cloudflare Worker).
 
-> **Be honest with yourself about the scope.** Cloudflare gives you four managed things for
-> free: the Worker runtime, the D1 database, Durable Objects (chat), and the relay network.
-> On a bare VM you provide all four. The OS packages (nginx, certbot, Node, SQLite) are a
-> quick `apt` away — but the app currently targets the **Workers runtime**, so a **port to
-> Node** is real work (a few well-defined shims, described in [Phase 3](#phase-3--port-the-app-to-node)).
-> The relay ([Phase 2](#phase-2--the-moq-relay)) is the part to get right first.
+> **Scope.** Cloudflare hosts three things for you: the Worker runtime, the D1 database,
+> and Durable Objects (chat). This guide provides those three on a plain VM. The **relay
+> backend is unchanged** — the app calls the same autoscaler (`/assign`) and mints the same
+> BYOK tokens it does on Cloudflare. (If you don't already have a relay backend to point
+> at, that's the same prerequisite either way — see
+> [cloudflare-install.md §6](./cloudflare-install.md#6-relay-backend-required-to-actually-stream).)
 
 Target: a working `https://yourdomain.com` where you can sign in, broadcast, and watch —
-all served from one box. Keep it simple and light: **SQLite** for the DB, an **in-process
-WebSocket** server for chat, **one** relay process.
+served from one box, streaming through your existing relay. Keep it simple and light:
+**SQLite** for the DB, an **in-process WebSocket** server for chat.
 
 ---
 
-## Architecture (one box)
+## Architecture (one box + the existing relay)
 
 ```
-                          one Ubuntu VM  →  yourdomain.com
-┌──────────────────────────────────────────────────────────────────────────┐
-│  nginx        TCP 80/443  (TLS via certbot)                                │
-│   ├── /              → static dist/ (the built frontend)                   │
-│   ├── /api/*         → reverse-proxy to the Node app (127.0.0.1:8787)      │
-│   └── /api/chat/*    → reverse-proxy WITH WebSocket upgrade → Node app      │
-│                                                                            │
-│  Node app     127.0.0.1:8787   [ported Worker]                             │
-│   ├── Google OAuth + sessions, stream settings, stats                      │
-│   ├── SQLite (better-sqlite3)            ← replaces D1                      │
-│   ├── in-process ws chat rooms           ← replaces Durable Objects        │
-│   ├── mints Ed25519 BYOK relay tokens                                      │
-│   └── "assign" → returns the LOCAL relay host:port (no autoscaler)         │
-│                                                                            │
-│  moq-relay    UDP 443 (QUIC / WebTransport, its OWN TLS cert)              │
-│   └── verifies BYOK Ed25519 tokens by kid; enforces put/get + exp          │
-└──────────────────────────────────────────────────────────────────────────┘
+            one Ubuntu VM  →  yourdomain.com                external (unchanged)
+┌──────────────────────────────────────────────────┐
+│  nginx       TCP 80/443  (TLS via certbot)         │
+│   ├── /           → static dist/ (built frontend)  │
+│   ├── /api/*      → reverse-proxy → Node app        │
+│   └── /api/chat/* → proxy WITH WebSocket upgrade    │
+│                                                    │
+│  Node app    127.0.0.1:8787  [ported Worker]       │      ┌────────────────────┐
+│   ├── OAuth + sessions, stream settings, stats     │      │  relay backend      │
+│   ├── SQLite (better-sqlite3)   ← replaces D1       │ ───▶ │  (TinyMoQ / your    │
+│   ├── in-process ws chat        ← replaces DO       │/assign│  autoscaler) —     │
+│   ├── mints Ed25519 BYOK relay tokens              │      │  SAME as Cloudflare │
+│   └── calls /assign for the relay host:port        │      └─────────┬──────────┘
+└──────────────────────────────────────────────────┘                │ QUIC
+                                                                      ▼
+                            Browser ────────── QUIC / WebTransport ───┘
+                            (publisher / viewer connect DIRECTLY to the relay)
 ```
 
-**Key transport fact:** WebTransport runs over **HTTP/3 / QUIC = UDP**, which nginx does
-**not** reverse-proxy. So the relay terminates its own TLS directly on a **UDP** port; nginx
-only handles the TCP app traffic. Both can share the same Let's Encrypt certificate.
+The browser connects to the **relay** directly over QUIC, exactly as on Cloudflare. The
+Ubuntu box only serves the web app over TCP — it never carries media — so this box needs
+**no UDP/QUIC listener** and no relay software.
 
 ---
 
@@ -54,12 +55,12 @@ only handles the TCP app traffic. Both can share the same Let's Encrypt certific
 | `env.DB` (D1) | **SQLite** via `better-sqlite3` + a thin `.prepare().bind().first()/all()/run()` adapter |
 | `env.CHAT_ROOMS` (Durable Object, `chat-room.ts`) | in-process `ws` server, `Map<streamId, room>`, in-memory history (last 50) |
 | `request.cf` geolocation | stub to `null`s (it only feeds stats); add MaxMind GeoLite2 later if wanted |
-| TinyMoQ `/assign` autoscaler | static: return the local relay's `host:port` |
-| `crypto.subtle` / `crypto.getRandomValues` | Node's global WebCrypto (Ed25519 works on Node 20+) — no change |
 | Worker secrets | a `.env` file loaded by the service (systemd `EnvironmentFile`) |
 
-Everything else (auth flow, token minting, encryption, settings, the whole frontend) is
-unchanged — it's the same `dist/` bundle.
+**Unchanged from Cloudflare:** the relay routing (`/assign` call), BYOK Ed25519 token
+minting, the auth flow, encryption, stream settings, and the entire frontend (`dist/`). If
+you reuse the same `MOQ_AUTH_PRIVATE_JWK`, your BYOK public key is already registered with
+the relay — nothing to re-register.
 
 ---
 
@@ -68,15 +69,13 @@ unchanged — it's the same `dist/` bundle.
 A small VM is fine to start (1–2 vCPU, 2 GB RAM). You need:
 
 - A **domain** with an **A record** pointing at the VM's public IP.
-- Inbound firewall: **TCP 80, TCP 443**, and **UDP 443** (the QUIC/WebTransport port —
-  this is the one everybody forgets).
+- Inbound firewall: **TCP 80 and TCP 443** only. (No UDP — media never touches this box.)
 
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
-sudo ufw allow 443/udp        # QUIC / WebTransport — required for media
 sudo ufw enable
 ```
 
@@ -102,35 +101,7 @@ near-exact match for D1 (which is SQLite under the hood), so `schema.sql` applie
 
 ---
 
-## Phase 2 — the MoQ relay
-
-This is the part to nail first; without it nothing streams. You need a **MoQ relay** that:
-
-1. Speaks the **same draft as the client**. The app pins `@kixelated/hang@0.3.12`
-   (**draft-07**) — see the README's Interoperability note. Your relay build must match;
-   a newer draft-14 relay won't connect. (This is exactly why the reference Linode/TinyMoQ
-   boxes ran a pinned, patched `moq-relay`.)
-2. **Verifies BYOK Ed25519 tokens.** It needs your **public** JWK (with its `kid`)
-   registered as a verify key, and must enforce the `put`/`get` path scopes + `exp` from
-   the token (the contract is documented inline in `src/worker/auth/moq-token.ts`).
-3. **Terminates TLS on UDP** with your domain's certificate (from Phase 4).
-
-Concretely:
-
-- Build or obtain a `moq-relay` compatible with the above (start from
-  [`kixelated/moq-rs`](https://github.com/kixelated/moq-rs) at a draft-07-compatible
-  revision, or the TinyMoQ relay tech). This is the **integration risk** — budget time here.
-- Configure it to bind `0.0.0.0:443/udp`, present the Let's Encrypt cert/key, and trust
-  your BYOK **public** JWK by `kid`.
-- Run it under systemd (see Phase 4) so it restarts on boot/crash.
-
-> Single-box simplification: the Cloudflare build calls a TinyMoQ **autoscaler** that
-> spins relays up/down and hands back a `host:port`. You have exactly one relay, so there's
-> no autoscaler — the Node app just returns `yourdomain.com:443` (Phase 3).
-
----
-
-## Phase 3 — port the app to Node
+## Phase 2 — port the app to Node
 
 `src/worker/index.ts` is written for the Workers runtime. Wrap the same logic in a Node
 server. The shims are small and well-bounded:
@@ -166,20 +137,20 @@ server. The shims are small and well-bounded:
    Mount it on the same `/api/chat/:streamId` route nginx upgrades. (Single box = no
    cross-instance coordination, so this is simpler than the DO.)
 
-4. **`env.ASSETS` → nginx.** Drop the asset-serving branch; nginx serves `dist/` (Phase 4).
+4. **`env.ASSETS` → nginx.** Drop the asset-serving branch; nginx serves `dist/` (Phase 3).
 
 5. **Geo.** Replace the `request.cf` block with `null`s (stats-only). Optional: add MaxMind
    GeoLite2 later.
 
-6. **Static "assign".** Replace the autoscaler HTTP call with a constant returning your
-   relay address (e.g. `{ relay: "yourdomain.com:443" }`); keep the BYOK token-minting path
-   exactly as-is. (No `TINYMOQ_PROVISION_KEY` needed in single-box mode.)
+6. **Relay routing — keep it.** Leave the `/assign` call and BYOK token-minting **exactly
+   as on Cloudflare**. It already points at your relay backend; nothing to change here.
 
-7. **Env/secrets.** Read from `process.env` (loaded from `/etc/moqplay/moqplay.env`):
-   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `MOQ_AUTH_PRIVATE_JWK`.
-   Generate them exactly as in [cloudflare-install.md §4](./cloudflare-install.md#4-generate-the-secrets)
-   (the same Ed25519 key-gen script — set the **private** JWK here, register the **public**
-   one with your relay in Phase 2).
+7. **Env/secrets.** Read from `process.env` (loaded from `/etc/moqplay/moqplay.env`) — the
+   **same set as Cloudflare**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`,
+   `MOQ_AUTH_PRIVATE_JWK`, `TINYMOQ_PROVISION_KEY` (and `RESOLVE_KEY` if you use the
+   enterprise path). Generate the first four exactly as in
+   [cloudflare-install.md §4](./cloudflare-install.md#4-generate-the-secrets); reuse the
+   same values as your Cloudflare deployment if you want them to share a relay tenant + key.
 
 Build the frontend once and on every update:
 
@@ -190,7 +161,7 @@ npm run build      # emits dist/
 
 ---
 
-## Phase 4 — nginx, TLS, and services
+## Phase 3 — nginx, TLS, and the service
 
 **1. Get a certificate** (point DNS at the box first):
 
@@ -198,9 +169,7 @@ npm run build      # emits dist/
 sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 ```
 
-This yields `/etc/letsencrypt/live/yourdomain.com/{fullchain.pem,privkey.pem}` — used by
-**both** nginx and the relay. Certbot installs an auto-renew timer; add a deploy hook to
-restart the relay after renewal.
+Certbot installs an auto-renew timer; no extra wiring needed (only nginx uses the cert).
 
 **2. nginx site** (`/etc/nginx/sites-available/moqplay`):
 
@@ -239,9 +208,7 @@ sudo ln -s /etc/nginx/sites-available/moqplay /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-**3. systemd services.**
-
-`/etc/systemd/system/moqplay-app.service`:
+**3. systemd service** — `/etc/systemd/system/moqplay-app.service`:
 
 ```ini
 [Unit]
@@ -251,7 +218,7 @@ After=network.target
 [Service]
 WorkingDirectory=/opt/moqplay
 EnvironmentFile=/etc/moqplay/moqplay.env
-ExecStart=/usr/bin/node server.mjs      # your Node entry from Phase 3
+ExecStart=/usr/bin/node server.mjs      # your Node entry from Phase 2
 Restart=always
 User=moqplay
 
@@ -259,17 +226,14 @@ User=moqplay
 WantedBy=multi-user.target
 ```
 
-`/etc/systemd/system/moq-relay.service` — runs the relay on UDP 443 with the certs from
-above (exact `ExecStart` depends on your relay build from Phase 2).
-
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now moqplay-app moq-relay
+sudo systemctl enable --now moqplay-app
 ```
 
 ---
 
-## Phase 5 — Google OAuth
+## Phase 4 — Google OAuth
 
 Same as Cloudflare, with your domain. In the
 [Google Cloud Console](https://console.cloud.google.com/) create a **Web application**
@@ -286,19 +250,17 @@ Put the client ID/secret in `/etc/moqplay/moqplay.env`.
 ## Verification
 
 1. `https://yourdomain.com` loads and Google sign-in completes (check `journalctl -u moqplay-app`).
-2. Start a broadcast in Chrome → it goes live (the app mints a token and points the
-   publisher at `yourdomain.com:443`).
-3. Open the share URL in another browser/tab → video plays, the green **Relay-blind**
-   pill shows (encryption is mandatory, decrypt succeeded end to end).
+2. Start a broadcast in Chrome → it goes live (the app mints a token and gets a relay
+   `host:port` from `/assign`).
+3. Open the share URL in another browser/tab → video plays through the relay, the green
+   **Relay-blind** pill shows (encryption is mandatory, decrypt succeeded end to end).
 4. Live chat round-trips between the two tabs.
 
 ## Troubleshooting
 
-- **Goes live but no video** — almost always the relay or UDP: confirm **UDP 443** is open
-  end-to-end, the relay is running (`systemctl status moq-relay`), it presents a valid cert,
-  and it **trusts your BYOK public key by `kid`** (a rejected token = silent no-media).
-- **Draft mismatch** — if the relay build isn't draft-07-compatible, the client won't
-  connect at all. Match the relay to `@kixelated/hang@0.3.12`.
+- **Goes live but no video** — this is the relay path, same as on Cloudflare: confirm
+  `TINYMOQ_PROVISION_KEY` is set and the relay backend is reachable from the box (the app's
+  `/assign` call), and that the BYOK key the app signs with is trusted by the relay.
 - **Chat doesn't connect** — the nginx `Upgrade`/`Connection` headers must be set on
   `/api/` (above), or the WebSocket handshake fails.
 - **Sign-in loops** — the Google redirect URI must match `…/api/auth/google/callback` exactly.
@@ -307,8 +269,7 @@ Put the client ID/secret in `/etc/moqplay/moqplay.env`.
 
 ## Reference
 
-- [cloudflare-install.md](./cloudflare-install.md) — the managed (Cloudflare) path; shares the secret/key steps
+- [cloudflare-install.md](./cloudflare-install.md) — the managed (Cloudflare) path; shares the secret/key + relay-backend steps
 - [README](./readme.md) — architecture, CDN options
-- `src/worker/auth/moq-token.ts` — the relay token contract (BYOK Ed25519) your relay must honor
+- `src/worker/auth/moq-token.ts` — the relay token contract (BYOK Ed25519) the relay honors
 - [MEDIA-ENCRYPTION.md](./MEDIA-ENCRYPTION.md) — relay-blind E2E encryption (unchanged on self-host)
-- [kixelated/moq-rs](https://github.com/kixelated/moq-rs) — reference moq-relay

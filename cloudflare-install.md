@@ -160,10 +160,14 @@ change stream settings. **Broadcasting won't work yet** — that needs the relay
 
 ## 6. Relay backend (required to actually stream)
 
-The Worker doesn't relay media itself. On go-live it calls a **TinyMoQ autoscaler** at a
-hardcoded host and asks for a relay `host:port`. A fresh fork is pinned to the reference
-infrastructure (`cdn.gpcmoq.com`), which only the reference deployment may use. To stream
-on your own deployment you must:
+The Worker doesn't relay media itself. On go-live it calls a **TinyMoQ fleet autoscaler**
+and asks for a relay `host:port`. The fleet it points at is the `FLEET_ENDPOINT` config
+value (see §6c) — it defaults to the reference fleet, which only the reference deployment
+may publish to. To stream on your own deployment you must:
+
+> If you run your own TinyMoQ fleet box too, [**CONNECTING-TO-A-FLEET.md**](./CONNECTING-TO-A-FLEET.md)
+> is the full wiring guide (the bearer + BYOK `verify_jwk` registration on the fleet's
+> `customers.json`). The steps below are the moqplay-side summary.
 
 ### 6a. Stand up a relay
 
@@ -178,16 +182,30 @@ verification keyed by `kid`. *(A managed option is on the roadmap — see the RE
 Give the relay the **public** JWK from §4 (with its `kid`) as a `verify_jwk`. The relay
 trusts tokens your Worker signs without ever holding a signing key.
 
-### 6c. Repoint the app at your relay
+### 6c. Point the app at your fleet (config, not code)
 
-Replace the hardcoded `*.gpcmoq.com` references with your own relay host(s):
+This is a settings change — **no source edits**. Set the fleet base URL in `wrangler.jsonc`:
 
-| File | What to change |
-| --- | --- |
-| `src/worker/index.ts` | `DEFAULT_AUTOSCALER` (the autoscaler base URL) |
-| `src/worker/index.ts` | `autoscalerBase()` and `isValidOrigin()` host allowlists (SSRF guards — must match your relay hostnames) |
-| `src/worker/index.ts` | `nearestBox()` — currently pinned to one box; set your box(es) / geo-routing |
-| `src/main.ts` | `FALLBACK_RELAYS` (the legacy Safari WebSocket fallback host) |
+```jsonc
+"vars": {
+  "FLEET_ENDPOINT": "https://cdn.yourfleet.com"
+}
+```
+
+The Worker calls `/assign` + `/release` on that endpoint and derives its SSRF allowlist
+from it (the fleet host plus sibling boxes under the same registrable domain, e.g.
+`usw.yourfleet.com`), so multi-box fleets work without code changes. Then make sure the
+matching secret is set (§4):
+
+- `TINYMOQ_PROVISION_KEY` — the bearer the fleet operator registered for your tenant.
+
+That's the whole "point me at a CDN" config: **`FLEET_ENDPOINT`** + **`TINYMOQ_PROVISION_KEY`**
++ your **BYOK keypair** (§4, public half registered in §6b). A new operator gives you an
+endpoint and a bearer; you set those two and deploy.
+
+*(One legacy spot is still hardcoded: `FALLBACK_RELAYS` in `src/main.ts`, the Safari
+WebSocket fallback host. Native WebTransport has largely retired that path; change it only
+if you still support the WS fallback.)*
 
 ### 6d. (Optional) Change the broadcast namespace
 
@@ -207,8 +225,8 @@ registered, and `TINYMOQ_PROVISION_KEY` set, broadcasting and watching will work
   `https://yourdomain.com/api/auth/google/callback` exactly (scheme, host, path).
 - **"encrypted but no content key / can't go live"** — encryption is mandatory; this means
   the broadcast row didn't get a content key. Check the Worker logs (`npx wrangler tail`).
-- **Goes live but no video** — almost always the relay backend (§6): the autoscaler host is
-  still `cdn.gpcmoq.com`, `TINYMOQ_PROVISION_KEY` is missing/wrong, or your BYOK public key
+- **Goes live but no video** — almost always the relay backend (§6): `FLEET_ENDPOINT` still
+  points at the default fleet, `TINYMOQ_PROVISION_KEY` is missing/wrong, or your BYOK public key
   isn't registered with the relay (token rejected).
 - **D1 errors on first load** — you skipped §1; run the `schema.sql` execute command.
 

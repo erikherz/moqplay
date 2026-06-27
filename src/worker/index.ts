@@ -34,6 +34,13 @@ export interface Env {
   // (/assign, /release) AND identifies the tenant, so the relay is keyed with this
   // tenant's registered key. Optional so deploys are safe before the operator sets it.
   TINYMOQ_PROVISION_KEY?: string;
+  // TinyMoQ fleet endpoint: the base URL the Worker calls /assign + /release on
+  // (e.g. https://cdn.tinymoq.com). Pointing at a different fleet is a config change,
+  // not a code change — set it in wrangler.jsonc `vars`. Optional; falls back to the
+  // historical box when unset. Pairs with TINYMOQ_PROVISION_KEY (the bearer that fleet
+  // registered for this tenant) and MOQ_AUTH_PRIVATE_JWK (whose public half the operator
+  // installs as the fleet's verify_jwk).
+  FLEET_ENDPOINT?: string;
   // Mode C (Enterprise): bearer for tinymoq's ASN→relay resolve API
   // (GET /api/enterprise/resolve). Optional — when unset, Mode C is skipped and the
   // viewer route behaves exactly as Modes B/A do today.
@@ -452,10 +459,10 @@ async function handleStreamRoutes(
     if (!row?.relay_host) {
       return new Response("offline", { status: 404 });
     }
-    const publisherCluster = row.relay_host; // cluster host, e.g. usw.gpcmoq.com / eu.gpcmoq.com
+    const publisherCluster = row.relay_host; // cluster host, e.g. usw.<fleet-domain>
 
     // Authoritative current relay for this broadcast (sticky per name).
-    const current = await assignRelay(streamId, publisherCluster, undefined, env.TINYMOQ_PROVISION_KEY);
+    const current = await assignRelay(env, streamId, publisherCluster, undefined, env.TINYMOQ_PROVISION_KEY);
     if (!current) {
       return new Response("offline", { status: 404 });
     }
@@ -560,7 +567,7 @@ async function handleStreamRoutes(
         cluster: true,
         exp: Math.floor(Date.now() / 1000) + PULL_TOKEN_TTL,
       });
-      const edge = await assignRelay(streamId, viewerCdn, origin, env.TINYMOQ_PROVISION_KEY, pullToken);
+      const edge = await assignRelay(env, streamId, viewerCdn, origin, env.TINYMOQ_PROVISION_KEY, pullToken);
       if (!edge) return new Response("offline", { status: 404 });
       relay = edge;
     }
@@ -639,17 +646,44 @@ async function handleStreamRoutes(
 }
 
 // Stats routes handler
-// --- gpcmoq broadcast→relay routing -------------------------------------
-// Each gpcmoq box is its own autoscaler: a sticky, idempotent /assign API keyed by the
-// full broadcast name (the key MUST match what the client publishes/subscribes). The
-// three boxes (usw=San Jose, use=Washington, eu=Amsterdam) are tenant-isolated by the
-// TINYMOQ_PROVISION_KEY bearer. NOTE: pinned to the single box cdn.gpcmoq.com for the
-// full end-to-end test (no prod traffic). Restore usw/use/eu + geo-routing (commit 351d830)
-// for multi-region. publisher-cdn / viewer-cdn still override; viewers co-locate via relay_host.
-const DEFAULT_AUTOSCALER = "https://cdn.gpcmoq.com";
-// NOTE: there is no static relay fallback. The autoscaler endpoint is a control API
-// (TCP), not a MoQ relay — UDP/443 has no media listener. Every media connection must
-// use a dynamic host:port from /assign or /route (relays advertise as <box>.gpcmoq.com:<port>).
+// --- TinyMoQ fleet broadcast→relay routing -------------------------------
+// Each fleet box is its own autoscaler: a sticky, idempotent /assign API keyed by the
+// full broadcast name (the key MUST match what the client publishes/subscribes), tenant-
+// isolated by the TINYMOQ_PROVISION_KEY bearer. The fleet the Worker points at is a SETTING
+// (env.FLEET_ENDPOINT), so switching fleets — or pointing an open-source instance at a new
+// operator's CDN — is a config change, not a code change. publisher-cdn / viewer-cdn still
+// override per-request (within the fleet domain); viewers co-locate via relay_host.
+//
+// NOTE: there is no static relay fallback. The autoscaler endpoint is a control API (TCP),
+// not a MoQ relay — UDP/443 has no media listener. Every media connection must use a
+// dynamic host:port from /assign or /route (relays advertise as <box>.<fleet-domain>:<port>).
+const FALLBACK_FLEET_ENDPOINT = "https://cdn.gpcmoq.com";
+
+// The fleet /assign+/release base URL for this deployment (no trailing slash).
+function fleetEndpoint(env: Env): string {
+  return (env.FLEET_ENDPOINT || FALLBACK_FLEET_ENDPOINT).replace(/\/+$/, "");
+}
+
+// The configured fleet's autoscaler hostname (e.g. cdn.tinymoq.com).
+function fleetHost(env: Env): string {
+  try {
+    return new URL(fleetEndpoint(env)).hostname.toLowerCase();
+  } catch {
+    return new URL(FALLBACK_FLEET_ENDPOINT).hostname;
+  }
+}
+
+// SSRF guard for user-supplied hosts (publisher-cdn / viewer-cdn / cross-cluster origin):
+// allow only the configured fleet host and sibling boxes under its registrable domain
+// (e.g. usw.<fleet-domain>), so multi-box fleets work without a code change while a
+// stray/hostile value can't redirect the Worker's /assign fetch off-fleet.
+function isFleetHost(env: Env, host: string): boolean {
+  const h = host.toLowerCase();
+  const fh = fleetHost(env);
+  if (h === fh) return true;
+  const parent = fh.split(".").slice(-2).join("."); // e.g. tinymoq.com
+  return parent.includes(".") && (h === parent || h.endsWith("." + parent));
+}
 
 function broadcastName(streamId: string): string {
   return `moqplay.com/${streamId}.hang`;
@@ -722,29 +756,27 @@ function generateContentKey(): string {
 }
 
 // Resolve the autoscaler base URL, honoring an optional per-request CDN override
-// (e.g. eu.gpcmoq.com) to target a specific box. Only the gpcmoq relay boxes are
+// (a specific box within the fleet). Only hosts on the configured fleet's domain are
 // allowed — this guards the Worker's fetch against SSRF via user input.
-function autoscalerBase(cdnHost?: string | null): string {
-  if (cdnHost && /^(usw|use|eu|cdn)\.gpcmoq\.com$/i.test(cdnHost)) {
+function autoscalerBase(env: Env, cdnHost?: string | null): string {
+  if (cdnHost && isFleetHost(env, cdnHost)) {
     return `https://${cdnHost}`;
   }
-  return DEFAULT_AUTOSCALER;
+  return fleetEndpoint(env);
 }
 
-// A gpcmoq relay origin "host:port" (the publisher's relay), for cross-cluster pulls.
-function isValidOrigin(origin: string): boolean {
-  return /^(usw|use|eu|cdn)\.gpcmoq\.com:\d+$/i.test(origin);
+// A fleet relay origin "host:port" (the publisher's relay), for cross-cluster pulls.
+// The host must be on the configured fleet's domain.
+function isValidOrigin(env: Env, origin: string): boolean {
+  const m = /^([a-z0-9.-]+):(\d+)$/i.exec(origin);
+  return !!m && isFleetHost(env, m[1]);
 }
 
-// Pick the nearest gpcmoq box for a publisher from Cloudflare's request geo, so
-// broadcasts land regionally instead of all on the default box. usw=San Jose,
-// use=Washington, eu=Amsterdam. Viewers co-locate on the publisher's box (relay_host),
-// so only the publisher needs geo-routing. Falls back to usw when geo is unknown.
-function nearestBox(request: Request): string {
-  // Pinned to the single test box for the full end-to-end test (no prod traffic).
-  // Restore geo-routing across usw/use/eu by reverting commit 351d830.
-  void request;
-  return "cdn.gpcmoq.com";
+// Pick the box for a publisher. Currently the configured fleet's autoscaler host (single
+// entry point); a future geo-router can return a sibling box under the same fleet domain
+// without touching callers. Viewers co-locate on the publisher's box (relay_host).
+function nearestBox(env: Env): string {
+  return fleetHost(env);
 }
 
 // Ask the autoscaler for the relay hosting this broadcast (spawns/sticks as needed).
@@ -759,6 +791,7 @@ function nearestBox(request: Request): string {
 // /assign is sticky; in managed mode a reap/respawn yields a new key, so do NOT cache
 // the key — sign on demand with whatever this call returned.
 async function assignRelay(
+  env: Env,
   streamId: string,
   cdnHost?: string | null,
   origin?: string | null,
@@ -766,9 +799,9 @@ async function assignRelay(
   pull?: string | null
 ): Promise<{ host: string; port: number; key?: string } | null> {
   const name = broadcastName(streamId);
-  const base = autoscalerBase(cdnHost);
+  const base = autoscalerBase(env, cdnHost);
   let query = `broadcast=${encodeURIComponent(name)}`;
-  if (origin && isValidOrigin(origin)) {
+  if (origin && isValidOrigin(env, origin)) {
     query += `&origin=${encodeURIComponent(origin)}`;
     // Cross-cluster: the edge relay needs a subscribe-scoped, cluster-flagged token
     // (minted with OUR signing key — the autoscaler holds none) to authenticate its
@@ -806,9 +839,9 @@ async function assignRelay(
 
 // Free the relay route when a broadcast ends so the node can be scaled down.
 // Release on the same CDN the broadcast was assigned to (its stored relay_host).
-async function releaseRelay(streamId: string, cdnHost?: string | null, provisionKey?: string | null): Promise<void> {
+async function releaseRelay(env: Env, streamId: string, cdnHost?: string | null, provisionKey?: string | null): Promise<void> {
   const name = broadcastName(streamId);
-  const base = autoscalerBase(cdnHost);
+  const base = autoscalerBase(env, cdnHost);
   try {
     await fetch(`${base}/release?broadcast=${encodeURIComponent(name)}`, { headers: provisionHeaders(provisionKey) });
   } catch (e) {
@@ -972,12 +1005,12 @@ async function handleStatsRoutes(
     const geo = getGeoFromRequest(request);
     console.log("Broadcast geo data:", JSON.stringify(geo));
 
-    // Ask the gpcmoq autoscaler which relay to publish to (sticky per broadcast name).
+    // Ask the fleet autoscaler which relay to publish to (sticky per broadcast name).
     // Geo-route to the publisher's nearest box (usw/use/eu) unless an explicit
     // publisher_cdn override is given (testing). Viewers co-locate via relay_host.
     // No static fallback: if /assign is down, relay is null and the client retries.
-    const publisherBox = body.publisher_cdn || nearestBox(request);
-    const assigned = await assignRelay(body.stream_id, publisherBox, undefined, env.TINYMOQ_PROVISION_KEY);
+    const publisherBox = body.publisher_cdn || nearestBox(env);
+    const assigned = await assignRelay(env, body.stream_id, publisherBox, undefined, env.TINYMOQ_PROVISION_KEY);
     const relayHost = assigned?.host ?? null;
     const relayPort = assigned?.port ?? null;
 
@@ -1038,7 +1071,7 @@ async function handleStatsRoutes(
       .run();
 
     if (row?.stream_id) {
-      await releaseRelay(row.stream_id, row.relay_host, env.TINYMOQ_PROVISION_KEY);
+      await releaseRelay(env, row.stream_id, row.relay_host, env.TINYMOQ_PROVISION_KEY);
     }
 
     return Response.json({ success: true });

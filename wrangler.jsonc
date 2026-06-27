@@ -7,6 +7,13 @@
     "directory": "./dist",
     "binding": "ASSETS"
   },
+  // TinyMoQ fleet this deployment points at — the base URL the Worker calls /assign +
+  // /release on. Switching fleets is a config change here, not a code change. Pairs with
+  // the TINYMOQ_PROVISION_KEY secret (the bearer the fleet registered for moqplay) and the
+  // MOQ_AUTH_PRIVATE_JWK secret (whose public half the operator installs as the verify_jwk).
+  "vars": {
+    "FLEET_ENDPOINT": "https://cdn.tinymoq.com"
+  },
   "d1_databases": [
     {
       "binding": "DB",

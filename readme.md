@@ -184,6 +184,7 @@ Each stream ID maps to a unique namespace (`yourdomain.com/{streamId}.hang`) on 
 - [moqplay.com](https://moqplay.com) — reference deployment
 - [cloudflare-install.md](./cloudflare-install.md) — step-by-step deploy guide (managed / Cloudflare)
 - [ubuntu-install.md](./ubuntu-install.md) — run the web app on a single Ubuntu VM (same relay backend)
+- [CONNECTING-TO-A-FLEET.md](./CONNECTING-TO-A-FLEET.md) — wire moqplay to your own TinyMoQ relay fleet (bearer + BYOK)
 - [TinyMoQ](https://tinymoq.com) — relay CDN
 - [MoQ Protocol](https://moq.dev/)
 - [Cloudflare MoQ Docs](https://developers.cloudflare.com/moq/)

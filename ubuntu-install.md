@@ -143,12 +143,14 @@ server. The shims are small and well-bounded:
    GeoLite2 later.
 
 6. **Relay routing — keep it.** Leave the `/assign` call and BYOK token-minting **exactly
-   as on Cloudflare**. It already points at your relay backend; nothing to change here.
+   as on Cloudflare**. The fleet it points at is config (`FLEET_ENDPOINT`), not code —
+   nothing to change here.
 
 7. **Env/secrets.** Read from `process.env` (loaded from `/etc/moqplay/moqplay.env`) — the
-   **same set as Cloudflare**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`,
-   `MOQ_AUTH_PRIVATE_JWK`, `TINYMOQ_PROVISION_KEY` (and `RESOLVE_KEY` if you use the
-   enterprise path). Generate the first four exactly as in
+   **same set as Cloudflare**: `FLEET_ENDPOINT` (the fleet base URL — on Cloudflare it's a
+   `wrangler.jsonc` var; here it's just an env value), `GOOGLE_CLIENT_ID`,
+   `GOOGLE_CLIENT_SECRET`, `SESSION_SECRET`, `MOQ_AUTH_PRIVATE_JWK`, `TINYMOQ_PROVISION_KEY`
+   (and `RESOLVE_KEY` if you use the enterprise path). Generate the key/secret values as in
    [cloudflare-install.md §4](./cloudflare-install.md#4-generate-the-secrets); reuse the
    same values as your Cloudflare deployment if you want them to share a relay tenant + key.
 
@@ -269,6 +271,7 @@ Put the client ID/secret in `/etc/moqplay/moqplay.env`.
 
 ## Reference
 
+- [CONNECTING-TO-A-FLEET.md](./CONNECTING-TO-A-FLEET.md) — wire this moqplay to your own TinyMoQ fleet box (bearer + BYOK `verify_jwk`)
 - [cloudflare-install.md](./cloudflare-install.md) — the managed (Cloudflare) path; shares the secret/key + relay-backend steps
 - [README](./readme.md) — architecture, CDN options
 - `src/worker/auth/moq-token.ts` — the relay token contract (BYOK Ed25519) the relay honors

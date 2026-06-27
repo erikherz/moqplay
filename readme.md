@@ -11,7 +11,6 @@ The reference deployment runs at **[moqplay.com](https://moqplay.com)** — but 
 - **Your domain, your branding** — change a couple of config values and it's your product, not MoQplay.
 - **Relay-blind end-to-end encryption** — media is encrypted in the browser; the relay only ever forwards ciphertext it can't read (see [MEDIA-ENCRYPTION.md](./MEDIA-ENCRYPTION.md)).
 - **Bring-your-own-CDN** — plug in the [TinyMoQ](https://tinymoq.com) relay CDN today, with **MoQcdn exchanges** on the roadmap (see below).
-- **Safari support** via a transparent WebSocket fallback.
 
 ## Architecture
 
@@ -133,12 +132,6 @@ When this lands, a MoQplay deployment will be able to source relays from an exch
 
 ---
 
-## Safari support
-
-Safari's WebTransport support is incomplete, so MoQplay ships a WebSocket polyfill (`webtransport-polyfill.ts`) that transparently falls back to a WebSocket-enabled relay. The frontend detects Safari, runs a latency race across the configured fallback relays, and connects to the fastest one over WebSocket; that relay bridges to the QUIC relay network on the browser's behalf.
-
----
-
 ## Usage
 
 ### Stream-based sessions
@@ -168,7 +161,7 @@ Each stream ID maps to a unique namespace (`yourdomain.com/{streamId}.hang`) on 
 ## Browser support
 
 - Chrome 97+, Edge 97+, Firefox 114+ — native WebTransport
-- Safari 17+ — via the WebSocket fallback described above
+- Safari 26.4+ — native WebTransport ([added in Safari 26.4](https://webkit.org/blog/17862/webkit-features-for-safari-26-4/), March 2026)
 
 ## Links
 

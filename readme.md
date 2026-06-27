@@ -1,110 +1,178 @@
-# Earthseed
+# MoQplay
 
-MoQ (Media over QUIC) streaming application using Cloudflare's relay network.
+An open-source, self-hostable live streaming app built on **MoQ (Media over QUIC)**. Deploy your own copy to Cloudflare in minutes, point it at your own domain, brand it as your own, and stream sub-second live video peer-to-relay-to-peer in the browser.
+
+The reference deployment runs at **[moqplay.com](https://moqplay.com)** — but the whole point is that you don't have to use it. Fork it, deploy it, and run your own.
+
+## What you get
+
+- **Ultra-low-latency live video** in the browser using the [@kixelated/hang](https://www.npmjs.com/package/@kixelated/hang) web components (IETF MoQ Transport, draft-07).
+- **One-command Cloudflare deploy** — the app is a single Cloudflare Worker that serves the static frontend *and* runs the API (auth, stream provisioning, relay-token minting).
+- **Your domain, your branding** — change a couple of config values and it's your product, not MoQplay.
+- **Relay-blind end-to-end encryption** — media is encrypted in the browser; the relay only ever forwards ciphertext it can't read (see [MEDIA-ENCRYPTION.md](./MEDIA-ENCRYPTION.md)).
+- **Bring-your-own-CDN** — plug in the [TinyMoQ](https://tinymoq.com) relay CDN today, with **MoQcdn exchanges** on the roadmap (see below).
+- **Safari support** via a transparent WebSocket fallback.
 
 ## Architecture
 
-- **Frontend**: Vite + [@kixelated/hang](https://www.npmjs.com/package/@kixelated/hang) v0.3.12 web components
-- **Relay**: Cloudflare's public MoQ relay (`relay.cloudflare.mediaoverquic.com`)
+```
+┌─────────────┐                                            ┌─────────────┐
+│   Browser   │ ───▶  MoQ relay (TinyMoQ CDN box)  ◀─────  │   Browser   │
+│ (Publisher) │  QUIC   host:port from /assign      QUIC   │  (Watcher)  │
+│ hang-publish│                                            │  hang-watch │
+└─────────────┘                                            └─────────────┘
+       │                                                          │
+       │            ┌──────────────────────────────┐             │
+       └──────────▶ │   MoQplay Cloudflare Worker   │ ◀───────────┘
+       static +     │  • serves frontend (dist/)    │   /api/* (auth,
+       /api/*       │  • Google OAuth + sessions    │   provision,
+                    │  • mints relay tokens (BYOK)  │   relay routing)
+                    │  • D1 (streams) + DO (chat)   │
+                    └───────────────┬──────────────┘
+                                    │ /assign · /route  (control API)
+                                    ▼
+                          TinyMoQ CDN autoscaler
+                       (your relay boxes / exchange)
+```
+
+How a broadcast flows:
+
+1. The browser asks the Worker to go live for a stream ID.
+2. The Worker calls the TinyMoQ autoscaler (`/assign`), which spins up / sticks a relay and returns its `host:port`.
+3. The Worker mints a relay token. MoQplay uses **BYOK** — it signs its own Ed25519 token with its tenant key, so the relay trusts it without sharing a secret.
+4. The publisher connects directly to the assigned relay over QUIC; viewers are routed to the same (or a co-located) relay via `/route`.
+
+The Worker is the only managed piece. The relays are supplied by whatever CDN you configure.
+
+## Tech stack
+
+- **Frontend**: Vite + `@kixelated/hang@0.3.12` web components
+- **Backend**: Cloudflare Workers, D1 (stream metadata), Durable Objects (`ChatRoom` chat)
+- **Auth**: Google OAuth + signed sessions
 - **Protocol**: IETF MoQ Transport draft-07
-- **Hosting**: Cloudflare Workers (static assets only)
+- **Relay tokens**: Ed25519 BYOK (own tenant key id)
 
-```
-┌─────────────┐         ┌──────────────────────────────┐         ┌─────────────┐
-│   Browser   │ ──────▶ │  relay.cloudflare.           │ ◀────── │   Browser   │
-│ (Publisher) │  QUIC   │  mediaoverquic.com           │  QUIC   │ (Watcher)   │
-│             │         │  (Cloudflare MoQ Relay)      │         │             │
-│ hang-publish│         └──────────────────────────────┘         │ hang-watch  │
-└─────────────┘                                                  └─────────────┘
-       │                                                                │
-       └──── Static HTML/JS served from earthseed.live (CF Workers) ───────┘
-```
+> **Version pin:** This project uses `@kixelated/hang@0.3.12` for compatibility with draft-07 relays. Newer versions (0.4+) use draft-14 and won't interoperate.
 
-## Requirements
+---
 
-- **Browser**: Chrome 97+, Edge 97+, Firefox 114+, or Safari 17+ (see Safari Support below)
-- **Node.js**: 20+
+## Deploy your own
 
-## Safari Support
+### Requirements
 
-Safari lacks full WebTransport support, so earthseed.live includes a WebSocket polyfill that transparently falls back to WebSocket-enabled relay servers.
+- **Cloudflare account** (Workers, D1, Durable Objects)
+- **Node.js** 20+
+- A relay CDN to point at (see [Choosing a CDN](#choosing-a-cdn))
 
-### Architecture
-
-```
-┌─────────────┐         ┌──────────────────────────────┐         ┌──────────────────────────────┐
-│   Safari    │ ──────▶ │  Linode Relay Server         │ ──────▶ │  relay.cloudflare.           │
-│   Browser   │WebSocket│  (moq-relay + WebSocket)     │  QUIC   │  mediaoverquic.com           │
-│             │         │                              │         │  (Cloudflare MoQ Relay)      │
-└─────────────┘         └──────────────────────────────┘         └──────────────────────────────┘
-```
-
-### How It Works
-
-1. **Detection**: The frontend detects Safari and loads the WebSocket polyfill (`webtransport-polyfill.ts`)
-2. **Relay Selection**: A latency race selects the fastest Linode relay server:
-   - `us-central.earthseed.live` (Dallas)
-   - `eu-central.earthseed.live` (Frankfurt)
-   - `ap-south.earthseed.live` (Singapore)
-3. **WebSocket Connection**: Safari connects to the Linode relay via WebSocket
-4. **Stream Proxy**: The relay uses the announce hostname to fetch streams from Cloudflare's relay over QUIC
-
-### Linode Relay Servers
-
-Each Linode server runs a patched version of [moq-relay](https://github.com/kixelated/moq-rs) with:
-- WebSocket support from the `@kixelated/hang` library
-- A patch that announces to and fetches from Cloudflare's relay (`relay.cloudflare.mediaoverquic.com`)
-- This allows Safari users to watch streams published by Chrome/Firefox users via the native Cloudflare relay
-
-## Development
+### 1. Install and run locally
 
 ```bash
 npm install
-npm run dev      # Start Vite dev server on localhost:3000
+npm run dev      # Vite dev server on localhost:3000
 ```
 
-## Deploy
+### 2. Make it yours — domain & branding
+
+**Domain** — edit `wrangler.jsonc`:
+
+```jsonc
+"name": "your-app",
+"routes": [
+  { "pattern": "yourdomain.com",     "custom_domain": true },
+  { "pattern": "www.yourdomain.com", "custom_domain": true }
+]
+```
+
+Also update the D1 binding (`database_name` / `database_id`) to your own database.
+
+**Branding** — the visible name lives in the frontend:
+
+- `index.html` — page `<title>` and the `<h1>` brand mark
+- `src/main.ts` / `src/worker/index.ts` — the broadcast namespace (`yourdomain.com/{streamId}.hang`) and any UI strings
+
+Swap the logo, colors, and footer links to taste — it's a normal Vite frontend.
+
+### 3. Configure secrets
+
+Set these as Worker secrets (`npx wrangler secret put <NAME>`):
+
+| Secret | Purpose |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth sign-in |
+| `SESSION_SECRET` | Signs user sessions |
+| `MOQ_AUTH_PRIVATE_JWK` | Your Ed25519 BYOK key for minting relay tokens |
+| `TINYMOQ_PROVISION_KEY` | Tenant bearer for the TinyMoQ autoscaler (`/assign`) |
+| `RESOLVE_KEY` | *(optional)* enterprise on-net relay resolution |
+
+### 4. Deploy
 
 ```bash
-npm run deploy   # Build and deploy to Cloudflare
+npm run deploy   # builds dist/ and ships the Worker to Cloudflare
 ```
+
+---
+
+## Choosing a CDN
+
+MoQplay separates the **app** (your Worker) from the **relay network** (the CDN). You decide where the media flows.
+
+### Option A — TinyMoQ CDN (available today)
+
+[TinyMoQ](https://tinymoq.com) is a relay CDN: each box is its own autoscaler exposing a sticky, idempotent `/assign` control API keyed by the broadcast name. The Worker calls it to get a relay `host:port` per broadcast, with geo-routing so publishers land on a nearby box and viewers co-locate on the publisher's box.
+
+To use it, run (or rent) TinyMoQ relay boxes, then point the Worker's autoscaler host at them and set `TINYMOQ_PROVISION_KEY`. This is what the reference `moqplay.com` deployment uses.
+
+### Option B — MoQcdn exchanges *(roadmap — stand by)*
+
+The next step is **MoQcdn**: a concept for *exchanges* where relay capacity is federated across providers rather than coming from a single operator — think of it as a marketplace/peering layer for MoQ relays.
+
+- **[moqcdnx.com](https://moqcdnx.com)** — the MoQcdn exchange concept and platform *(planned)*.
+- **[moqcdn.net](https://moqcdn.net)** — the first exchange, a production deployment of TinyMoQ technology *(planned)*.
+
+When this lands, a MoQplay deployment will be able to source relays from an exchange instead of pinning to one operator's boxes. Details to follow — this section is a placeholder for the work in progress.
+
+---
+
+## Safari support
+
+Safari's WebTransport support is incomplete, so MoQplay ships a WebSocket polyfill (`webtransport-polyfill.ts`) that transparently falls back to a WebSocket-enabled relay. The frontend detects Safari, runs a latency race across the configured fallback relays, and connects to the fastest one over WebSocket; that relay bridges to the QUIC relay network on the browser's behalf.
+
+---
 
 ## Usage
 
-### Stream-Based Sessions
+### Stream-based sessions
 
-Each session uses a unique 5-character stream ID for isolation:
+Each session uses a unique short stream ID for isolation:
 
-- **Visit `earthseed.live`** → Auto-generates a stream (e.g., `https://earthseed.live/ab3x9`)
-- **Share the URL** → Others open the same URL to watch
-- **Click "+ New Stream"** → Creates a fresh stream
+- **Visit your site** → auto-generates a stream (e.g. `https://yourdomain.com/ab3x9`)
+- **Share the URL** → others open it to watch
+- **"+ New Stream"** → creates a fresh stream
+
+Each stream ID maps to a unique namespace (`yourdomain.com/{streamId}.hang`) on the relay, preventing conflicts between sessions.
 
 ### Broadcasting
 
-1. Open https://earthseed.live in Chrome
-2. A unique 5-character stream ID is generated automatically
-3. Click "Start" in the Broadcast section
-4. Allow camera and microphone access
-5. Share the URL with viewers (e.g., `https://earthseed.live/ab3x9`)
+1. Open your site in Chrome/Edge/Firefox.
+2. A unique stream ID is generated automatically.
+3. Click **Start** in the Broadcast section and allow camera/microphone.
+4. Share the URL with viewers.
 
 ### Watching
 
-1. Open the shared URL (e.g., `https://earthseed.live/ab3x9`)
-2. The stream begins playing automatically
-3. Click play if needed
+1. Open the shared URL.
+2. The stream begins playing automatically (click play if needed).
 
-### Stream Namespace
+---
 
-Streams use the format: `earthseed.live/{streamId}`
+## Browser support
 
-Each 5-character stream ID maps to a unique namespace on the Cloudflare relay, preventing conflicts between sessions.
-
-## Interoperability
-
-**Key point:** This project uses `@kixelated/hang@0.3.12` specifically for compatibility with Cloudflare's draft-07 relay. Newer versions (0.4+) use draft-14 and won't connect.
+- Chrome 97+, Edge 97+, Firefox 114+ — native WebTransport
+- Safari 17+ — via the WebSocket fallback described above
 
 ## Links
 
-- [Live Site](https://earthseed.live)
-- [Cloudflare MoQ Docs](https://developers.cloudflare.com/moq/)
+- [moqplay.com](https://moqplay.com) — reference deployment
+- [TinyMoQ](https://tinymoq.com) — relay CDN
 - [MoQ Protocol](https://moq.dev/)
+- [Cloudflare MoQ Docs](https://developers.cloudflare.com/moq/)

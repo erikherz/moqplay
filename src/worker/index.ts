@@ -34,13 +34,20 @@ export interface Env {
   // (/assign, /release) AND identifies the tenant, so the relay is keyed with this
   // tenant's registered key. Optional so deploys are safe before the operator sets it.
   TINYMOQ_PROVISION_KEY?: string;
-  // TinyMoQ fleet endpoint: the base URL the Worker calls /assign + /release on
-  // (e.g. https://cdn.tinymoq.com). Pointing at a different fleet is a config change,
-  // not a code change — set it in wrangler.jsonc `vars`. Optional; falls back to the
-  // historical box when unset. Pairs with TINYMOQ_PROVISION_KEY (the bearer that fleet
-  // registered for this tenant) and MOQ_AUTH_PRIVATE_JWK (whose public half the operator
-  // installs as the fleet's verify_jwk).
+  // TinyMoQ fleet endpoint: the base URL the Worker hits to get a relay for a broadcast.
+  // Switching endpoints (or paths, see FLEET_MODE) is a config change, not a code change —
+  // set it in wrangler.jsonc `vars`. Optional; falls back to the historical box when unset.
+  //   - direct mode:   the relay box, e.g. https://cdn.tinymoq.com   (Worker calls /assign + /release)
+  //   - brokered mode: the operator's broker, e.g. https://tinymoq.com (Worker POSTs /cdn/assign)
+  // Pairs with TINYMOQ_PROVISION_KEY (the credential — a provisioning bearer in direct mode,
+  // an operator-issued customer token in brokered mode) and MOQ_AUTH_PRIVATE_JWK (whose
+  // public half is installed as the fleet's verify_jwk — BYOK is unchanged across both paths).
   FLEET_ENDPOINT?: string;
+  // How the Worker gets a relay: "direct" (Path 1 — call a relay box's /assign yourself) or
+  // "brokered" (Path 2 — POST {broadcast} to a CDN operator's broker, which selects the box
+  // and returns {relay}). Default "direct". In brokered mode moqplay never sees box topology
+  // and holds no per-box secret, so the operator adding/removing boxes needs no config change.
+  FLEET_MODE?: string;
   // Mode C (Enterprise): bearer for tinymoq's ASN→relay resolve API
   // (GET /api/enterprise/resolve). Optional — when unset, Mode C is skipped and the
   // viewer route behaves exactly as Modes B/A do today.
@@ -647,21 +654,33 @@ async function handleStreamRoutes(
 
 // Stats routes handler
 // --- TinyMoQ fleet broadcast→relay routing -------------------------------
-// Each fleet box is its own autoscaler: a sticky, idempotent /assign API keyed by the
-// full broadcast name (the key MUST match what the client publishes/subscribes), tenant-
-// isolated by the TINYMOQ_PROVISION_KEY bearer. The fleet the Worker points at is a SETTING
-// (env.FLEET_ENDPOINT), so switching fleets — or pointing an open-source instance at a new
-// operator's CDN — is a config change, not a code change. publisher-cdn / viewer-cdn still
-// override per-request (within the fleet domain); viewers co-locate via relay_host.
+// "Get a relay" has TWO configurable paths (FLEET_MODE); both return a host:port the
+// browser connects to, and both keep BYOK token signing (only the endpoint + credential
+// differ, so switching paths is config, not code):
+//   - direct (Path 1):   the Worker calls a relay box's /assign itself (GET, keyed by the
+//                         full broadcast name), authed by the provisioning bearer. The box
+//                         is its own sticky/idempotent autoscaler; publisher-cdn/viewer-cdn
+//                         override per-request within the fleet domain; viewers co-locate
+//                         via relay_host.
+//   - brokered (Path 2): the Worker POSTs {broadcast} to a CDN operator's broker, which
+//                         selects a box and returns {relay}. moqplay never sees box topology
+//                         and holds no per-box secret, so the operator scaling boxes needs
+//                         no config change; auth is an operator-issued customer token.
+// The endpoint is env.FLEET_ENDPOINT; the credential is env.TINYMOQ_PROVISION_KEY.
 //
 // NOTE: there is no static relay fallback. The autoscaler endpoint is a control API (TCP),
 // not a MoQ relay — UDP/443 has no media listener. Every media connection must use a
 // dynamic host:port from /assign or /route (relays advertise as <box>.<fleet-domain>:<port>).
 const FALLBACK_FLEET_ENDPOINT = "https://cdn.gpcmoq.com";
 
-// The fleet /assign+/release base URL for this deployment (no trailing slash).
+// The fleet base URL for this deployment (no trailing slash).
 function fleetEndpoint(env: Env): string {
   return (env.FLEET_ENDPOINT || FALLBACK_FLEET_ENDPOINT).replace(/\/+$/, "");
+}
+
+// Which "get a relay" path this deployment uses (see FLEET_MODE). Default direct.
+function fleetMode(env: Env): "direct" | "brokered" {
+  return (env.FLEET_MODE || "").trim().toLowerCase() === "brokered" ? "brokered" : "direct";
 }
 
 // The configured fleet's autoscaler hostname (e.g. cdn.tinymoq.com).
@@ -799,6 +818,12 @@ async function assignRelay(
   pull?: string | null
 ): Promise<{ host: string; port: number; key?: string } | null> {
   const name = broadcastName(streamId);
+  // Path 2 (brokered): hand the broadcast to the operator and let it pick the box. The
+  // cdnHost/origin/pull overrides are direct-mode (self-selected box) concerns and don't
+  // apply — the operator owns topology.
+  if (fleetMode(env) === "brokered") {
+    return assignViaBroker(env, name, provisionKey);
+  }
   const base = autoscalerBase(env, cdnHost);
   let query = `broadcast=${encodeURIComponent(name)}`;
   if (origin && isValidOrigin(env, origin)) {
@@ -837,10 +862,52 @@ async function assignRelay(
   return null;
 }
 
-// Free the relay route when a broadcast ends so the node can be scaled down.
-// Release on the same CDN the broadcast was assigned to (its stored relay_host).
+// Path 2 (brokered): POST {broadcast} to the operator's broker; it selects a box and
+// returns {relay:"host:port"}. No per-stream key (BYOK — moqplay signs the viewer/publisher
+// token itself), no topology and no cdnHost/origin overrides (the operator owns box
+// selection). `credential` is the operator-issued customer token, sent as a bearer.
+async function assignViaBroker(
+  env: Env,
+  broadcast: string,
+  credential?: string | null
+): Promise<{ host: string; port: number; key?: string } | null> {
+  const base = fleetEndpoint(env);
+  try {
+    const res = await fetch(`${base}/cdn/assign`, {
+      method: "POST",
+      headers: { ...provisionHeaders(credential), "content-type": "application/json" },
+      body: JSON.stringify({ broadcast }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { relay?: string };
+      const [host, portStr] = String(data.relay ?? "").split(":");
+      const port = parseInt(portStr, 10);
+      if (host && Number.isFinite(port)) return { host, port };
+    }
+    console.warn("assignViaBroker: unexpected /cdn/assign response", res.status);
+  } catch (e) {
+    console.warn("assignViaBroker: /cdn/assign failed", e);
+  }
+  return null;
+}
+
+// Free the relay route when a broadcast ends so the node can be scaled down. Direct mode
+// releases the box it assigned (the stored relay_host); brokered mode tells the operator,
+// which owns the box lifecycle.
 async function releaseRelay(env: Env, streamId: string, cdnHost?: string | null, provisionKey?: string | null): Promise<void> {
   const name = broadcastName(streamId);
+  if (fleetMode(env) === "brokered") {
+    try {
+      await fetch(`${fleetEndpoint(env)}/cdn/release`, {
+        method: "POST",
+        headers: { ...provisionHeaders(provisionKey), "content-type": "application/json" },
+        body: JSON.stringify({ broadcast: name }),
+      });
+    } catch (e) {
+      console.warn("releaseRelay(brokered): /cdn/release failed", e);
+    }
+    return;
+  }
   const base = autoscalerBase(env, cdnHost);
   try {
     await fetch(`${base}/release?broadcast=${encodeURIComponent(name)}`, { headers: provisionHeaders(provisionKey) });

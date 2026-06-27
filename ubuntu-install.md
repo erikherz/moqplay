@@ -271,7 +271,7 @@ Put the client ID/secret in `/etc/moqplay/moqplay.env`.
 
 ## Reference
 
-- [CONNECTING-TO-A-FLEET.md](./CONNECTING-TO-A-FLEET.md) — wire this moqplay to your own TinyMoQ fleet box (bearer + BYOK `verify_jwk`)
+- [CONNECTING-TO-A-FLEET.md](./CONNECTING-TO-A-FLEET.md) — connect this moqplay to a TinyMoQ fleet: direct (self-hosted box + bearer) or brokered (operator + customer token)
 - [cloudflare-install.md](./cloudflare-install.md) — the managed (Cloudflare) path; shares the secret/key + relay-backend steps
 - [README](./readme.md) — architecture, CDN options
 - `src/worker/auth/moq-token.ts` — the relay token contract (BYOK Ed25519) the relay honors

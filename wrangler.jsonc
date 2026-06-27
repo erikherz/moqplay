@@ -7,12 +7,16 @@
     "directory": "./dist",
     "binding": "ASSETS"
   },
-  // TinyMoQ fleet this deployment points at — the base URL the Worker calls /assign +
-  // /release on. Switching fleets is a config change here, not a code change. Pairs with
-  // the TINYMOQ_PROVISION_KEY secret (the bearer the fleet registered for moqplay) and the
-  // MOQ_AUTH_PRIVATE_JWK secret (whose public half the operator installs as the verify_jwk).
+  // How this deployment gets a relay (config, not code — see src/worker/index.ts).
+  //   FLEET_MODE "direct":   call a relay box's /assign yourself (endpoint = the box).
+  //   FLEET_MODE "brokered": POST {broadcast} to a CDN operator's broker, which picks the
+  //                          box (endpoint = the operator, e.g. https://tinymoq.com).
+  // TINYMOQ_PROVISION_KEY (secret) is the credential: a provisioning bearer in direct mode,
+  // an operator-issued customer token in brokered mode. MOQ_AUTH_PRIVATE_JWK (secret) signs
+  // tokens; its public half is the verify_jwk installed on the boxes (BYOK, both modes).
   "vars": {
-    "FLEET_ENDPOINT": "https://cdn.tinymoq.com"
+    "FLEET_ENDPOINT": "https://cdn.tinymoq.com",
+    "FLEET_MODE": "direct"
   },
   "d1_databases": [
     {

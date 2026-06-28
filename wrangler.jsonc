@@ -8,15 +8,17 @@
     "binding": "ASSETS"
   },
   // How this deployment gets a relay (config, not code — see src/worker/index.ts).
-  //   FLEET_MODE "direct":   call a relay box's /assign yourself (endpoint = the box).
-  //   FLEET_MODE "brokered": POST {broadcast} to a CDN operator's broker, which picks the
-  //                          box (endpoint = the operator, e.g. https://tinymoq.com).
-  // TINYMOQ_PROVISION_KEY (secret) is the credential: a provisioning bearer in direct mode,
-  // an operator-issued customer token in brokered mode. MOQ_AUTH_PRIVATE_JWK (secret) signs
-  // tokens; its public half is the verify_jwk installed on the boxes (BYOK, both modes).
+  //   FLEET_MODE "direct":   call a relay box's /assign yourself (FLEET_ENDPOINT = box base);
+  //                          credential = TINYMOQ_PROVISION_KEY secret (the box bearer).
+  //   FLEET_MODE "brokered": POST {broadcast} to a CDN operator's broker, which picks the box
+  //                          (FLEET_ENDPOINT = the broker's full assign URL); credential =
+  //                          CDN_API_TOKEN secret (the operator-issued CUSTOMER token).
+  // moqplay.com runs brokered: it holds only the customer token; the box bearer stays with
+  // the operator and is never set here. MOQ_AUTH_PRIVATE_JWK (secret) signs tokens; its public
+  // half is the verify_jwk the operator installs on the boxes (BYOK, both modes).
   "vars": {
-    "FLEET_ENDPOINT": "https://cdn.tinymoq.com",
-    "FLEET_MODE": "direct"
+    "FLEET_MODE": "brokered",
+    "FLEET_ENDPOINT": "https://tinymoq.com/cdn/assign"
   },
   "d1_databases": [
     {

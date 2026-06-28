@@ -9,10 +9,16 @@ the **assign endpoint** and the **credential** — so switching paths is **confi
 |---|---|---|
 | Who runs the fleet | you (self-hosted fleet) or a box you call yourself | a CDN operator fronts the fleet |
 | `FLEET_MODE` | `direct` | `brokered` |
-| `FLEET_ENDPOINT` | the relay box, e.g. `https://cdn.tinymoq.com` | the operator's broker, e.g. `https://tinymoq.com` |
-| `TINYMOQ_PROVISION_KEY` | a **provisioning bearer** you choose | an operator-issued **customer token** |
+| `FLEET_ENDPOINT` | the relay box **base**, e.g. `https://cdn.tinymoq.com` | the broker's **full assign URL**, e.g. `https://tinymoq.com/cdn/assign` |
+| Credential (secret) | `TINYMOQ_PROVISION_KEY` — the **box bearer** you choose | `CDN_API_TOKEN` — an operator-issued **customer token** |
 | Who picks the box | moqplay (calls the box's `/assign`) | the operator (moqplay POSTs `{broadcast}`) |
 | Box registration | you edit the fleet's `customers.json` | the operator does it; you skip it |
+
+> **Don't cross the credentials.** In brokered mode the box bearer (`TINYMOQ_PROVISION_KEY`)
+> belongs to the **operator**, never to moqplay — it's the broker's credential to the box,
+> and cdnadmin labels it *"do not hand to the customer."* moqplay holds only the customer
+> token (`CDN_API_TOKEN`). Putting the box bearer in the customer app defeats the whole
+> point of Path 2.
 
 > moqplay's config knobs are its real settings. **Where they live:** on a Cloudflare
 > deployment, `FLEET_ENDPOINT` + `FLEET_MODE` are `wrangler.jsonc` `vars` and the keys are
@@ -26,9 +32,10 @@ the **assign endpoint** and the **credential** — so switching paths is **confi
 A moqplay deployment talks to a relay fleet using **two independent credentials** — don't
 conflate them:
 
-1. **The credential** (`TINYMOQ_PROVISION_KEY`) — what lets moqplay's *server* ask the fleet
-   for a relay. In direct mode it's a **provisioning bearer**; in brokered mode it's an
-   **operator-issued customer token**. Either way it's sent as `Authorization: Bearer …`.
+1. **The credential** — what lets moqplay's *server* ask the fleet for a relay, sent as
+   `Authorization: Bearer …`. It's **mode-specific**: direct uses `TINYMOQ_PROVISION_KEY`
+   (the box bearer — fine because you operate the box); brokered uses `CDN_API_TOKEN` (an
+   operator-issued customer token). The box bearer is **never** present on a brokered moqplay.
 
 2. **moqplay's BYOK signing keypair** — moqplay signs every viewer/publisher **access token**
    (a scoped, expiring JWT) with its **private** key (`MOQ_AUTH_PRIVATE_JWK`); the relay
@@ -119,9 +126,12 @@ or removes boxes, **moqplay's config doesn't change**.
 
 ```
 FLEET_MODE             = brokered
-FLEET_ENDPOINT         = https://tinymoq.com          # the OPERATOR's broker, not a box
-TINYMOQ_PROVISION_KEY  = <the customer token the operator gave you>
-MOQ_AUTH_PRIVATE_JWK   = <your Ed25519 private JWK>    # unchanged — BYOK as always
+FLEET_ENDPOINT         = https://tinymoq.com/cdn/assign   # the OPERATOR's assign URL, not a box
+CDN_API_TOKEN          = <the cdn_… customer token the operator gave you>   # secret
+MOQ_AUTH_PRIVATE_JWK   = <your Ed25519 private JWK>       # unchanged — BYOK as always
+
+# Do NOT set TINYMOQ_PROVISION_KEY here — that's the broker's bearer to the box, an
+# operator-internal secret. moqplay only ever holds the customer token (CDN_API_TOKEN).
 ```
 
 Get `FLEET_ENDPOINT` + the customer token from the operator's **cdnadmin connection-details**

@@ -113,7 +113,7 @@ prompted to paste the value):
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | from §3 |
 | `SESSION_SECRET` | signs user session cookies | `openssl rand -base64 32` |
 | `MOQ_AUTH_PRIVATE_JWK` | your Ed25519 **BYOK** signing key (JSON) | `npm run keygen` (below) |
-| `TINYMOQ_PROVISION_KEY` | bearer token for your relay's `/assign` API | from your relay backend (§6) |
+| `TINYMOQ_PROVISION_KEY` *(direct)* **or** `CDN_API_TOKEN` *(brokered)* | the relay credential — box bearer (direct) or operator customer token (brokered) | from your relay backend / operator (§6) |
 | `RESOLVE_KEY` | *(optional)* enterprise on-net relay resolution | from your relay backend |
 
 ### Generate the BYOK key pair
@@ -184,24 +184,27 @@ trusts tokens your Worker signs without ever holding a signing key.
 
 ### 6c. Point the app at your fleet (config, not code)
 
-This is a settings change — **no source edits**. Set the fleet base URL in `wrangler.jsonc`:
+This is a settings change — **no source edits** — and there are two paths. Full detail in
+[CONNECTING-TO-A-FLEET.md](./CONNECTING-TO-A-FLEET.md); the short version:
 
+**Direct** (you operate the box). `wrangler.jsonc`:
 ```jsonc
-"vars": {
-  "FLEET_ENDPOINT": "https://cdn.yourfleet.com"
-}
+"vars": { "FLEET_MODE": "direct", "FLEET_ENDPOINT": "https://cdn.yourfleet.com" }
 ```
+The Worker calls `/assign` + `/release` on that base and derives its SSRF allowlist from it
+(the host plus sibling boxes under the same registrable domain), so multi-box fleets work
+without code changes. Secret: `TINYMOQ_PROVISION_KEY` — the box bearer.
 
-The Worker calls `/assign` + `/release` on that endpoint and derives its SSRF allowlist
-from it (the fleet host plus sibling boxes under the same registrable domain, e.g.
-`usw.yourfleet.com`), so multi-box fleets work without code changes. Then make sure the
-matching secret is set (§4):
+**Brokered** (a CDN operator fronts the fleet — what `moqplay.com` uses). `wrangler.jsonc`:
+```jsonc
+"vars": { "FLEET_MODE": "brokered", "FLEET_ENDPOINT": "https://tinymoq.com/cdn/assign" }
+```
+The Worker POSTs `{broadcast}` to that assign URL; the operator picks the box. Secret:
+`CDN_API_TOKEN` — the operator-issued **customer token**. **Do not** set
+`TINYMOQ_PROVISION_KEY` here — the box bearer stays with the operator.
 
-- `TINYMOQ_PROVISION_KEY` — the bearer the fleet operator registered for your tenant.
-
-That's the whole "point me at a CDN" config: **`FLEET_ENDPOINT`** + **`TINYMOQ_PROVISION_KEY`**
-+ your **BYOK keypair** (§4, public half registered in §6b). A new operator gives you an
-endpoint and a bearer; you set those two and deploy.
+So the "point me at a CDN" config is **`FLEET_MODE`** + **`FLEET_ENDPOINT`** + the matching
+**credential secret** + your **BYOK keypair** (§4, public half registered/installed per §6b).
 
 *(One legacy spot is still hardcoded: `FALLBACK_RELAYS` in `src/main.ts`, the Safari
 WebSocket fallback host. Native WebTransport has largely retired that path; change it only
@@ -226,7 +229,8 @@ registered, and `TINYMOQ_PROVISION_KEY` set, broadcasting and watching will work
 - **"encrypted but no content key / can't go live"** — encryption is mandatory; this means
   the broadcast row didn't get a content key. Check the Worker logs (`npx wrangler tail`).
 - **Goes live but no video** — almost always the relay backend (§6): `FLEET_ENDPOINT` still
-  points at the default fleet, `TINYMOQ_PROVISION_KEY` is missing/wrong, or your BYOK public key
+  points at the wrong fleet/path, the credential secret is missing/wrong (`TINYMOQ_PROVISION_KEY`
+  in direct, `CDN_API_TOKEN` in brokered), or your BYOK public key
   isn't registered with the relay (token rejected).
 - **D1 errors on first load** — you skipped §1; run the `schema.sql` execute command.
 

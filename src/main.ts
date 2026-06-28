@@ -1205,10 +1205,12 @@ function initBroadcastView(streamId: string, user: User | null) {
             if (camera && !comp.hasCamera()) await comp.enableCamera();
             else if (!camera && comp.hasCamera()) comp.disableCamera();
 
-            // Audio routing: screen present -> system/tab audio; else the mic. The mix's
-            // output track is stable, so crossing mic<->system never resets audio.
+            // Audio routing: the mic is captured whenever audio is on (incl. while screen
+            // sharing — for narration), and tab/system audio is additionally mixed in when a
+            // screen that carries audio is shared. Both feed one stable mixed output track,
+            // so toggling sources never resets the published audio.
             comp.setSystemAudioEnabled(audio && screen);
-            await comp.setMicEnabled(audio && !screen);
+            await comp.setMicEnabled(audio);
 
             publisher.announce = true;
             publisher.source = undefined;
@@ -1279,7 +1281,7 @@ function initBroadcastView(streamId: string, user: User | null) {
       bar.appendChild(b);
     };
     makeToggle("camera", "📹", "Camera");
-    makeToggle("audio", "🎤", "Audio (mic, or system audio with screen)");
+    makeToggle("audio", "🎤", "Audio (microphone; also mixes in tab/system audio when screen sharing)");
     makeToggle("screen", "🖥️", "Screen");
 
     const stopBtn = document.createElement("button");

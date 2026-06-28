@@ -1151,14 +1151,21 @@ function initBroadcastView(streamId: string, user: User | null) {
     // and audio-mix tracks are published once and never re-set. Toggling camera/screen/
     // mic changes only the compositor's inputs, so the viewer never sees a track reset
     // (RESET_STREAM) — the <moq-watch> element can't re-subscribe after one and would
-    // otherwise freeze. Audio-only (mic, no video) stays on the element's native source.
+    // otherwise freeze. ALL capture (including audio-only) goes through the compositor so
+    // the publish path never switches the element's source mode mid-broadcast — that switch
+    // silently dropped audio when the sequence was audio-first-then-video.
     let comp: Compositor | null = null;
-    let bound = false; // whether the compositor's tracks are wired into the broadcast
+    // Video and audio sources are wired in independently and each exactly once, so a track
+    // that appears later (camera added after audio-only, or vice versa) binds without
+    // re-setting the other (re-setting a live track triggers RESET_STREAM → frozen viewers).
+    let boundVideo = false;
+    let boundAudio = false;
     const teardownComposite = () => {
       if (!comp) return;
       comp.stop();
       comp = null;
-      bound = false;
+      boundVideo = false;
+      boundAudio = false;
       bcast.video.source.set(undefined);
       bcast.audio.source.set(undefined);
       const v = publisher.querySelector("video") as HTMLElement | null;
@@ -1175,7 +1182,10 @@ function initBroadcastView(streamId: string, user: User | null) {
         anyActive = camera || audio || screen;
         const hasVideo = camera || screen;
 
-        if (hasVideo) {
+        // Any active capture — video and/or audio — runs through ONE compositor path.
+        // Audio-only just publishes the audio mix with no video track bound. Keeping a
+        // single path is what makes the sequence order-independent.
+        if (anyActive) {
           try {
             if (!comp) {
               comp = createCompositor();
@@ -1184,7 +1194,7 @@ function initBroadcastView(streamId: string, user: User | null) {
               comp.canvas.className = "pip-canvas";
               publisher.insertAdjacentElement("afterbegin", comp.canvas);
             }
-            // Reconcile sources without re-prompting the ones already captured.
+            // Reconcile video sources without re-prompting the ones already captured.
             if (screen && !comp.hasScreen()) {
               await comp.enableScreen({
                 onEnded: () => { capture.screen = false; syncButtons(); void applyState(); },
@@ -1202,13 +1212,20 @@ function initBroadcastView(streamId: string, user: User | null) {
 
             publisher.announce = true;
             publisher.source = undefined;
-            publisher.invisible = false;
+            publisher.invisible = !hasVideo; // audio-only -> no camera light / no video track
             publisher.muted = false; // the mixed audio track is always published (silent when audio off) to keep it stable
-            // Wire the stable tracks exactly once; re-setting them would reset the track.
-            if (!bound) {
+            // Bind each track once, when it first appears. Drop the video track if video
+            // goes away while audio stays (so audio-only never publishes a black frame).
+            if (!hasVideo && boundVideo) {
+              bcast.video.source.set(undefined);
+              boundVideo = false;
+            } else if (hasVideo && !boundVideo) {
               bcast.video.source.set(comp.videoTrack);
+              boundVideo = true;
+            }
+            if (!boundAudio) {
               bcast.audio.source.set(comp.audioTrack);
-              bound = true;
+              boundAudio = true;
             }
             void goLive();
           } catch (e) {
@@ -1221,18 +1238,11 @@ function initBroadcastView(streamId: string, user: User | null) {
           return;
         }
 
-        // No video — drop the composite and use the element's own capture (audio-only/idle).
+        // Nothing active — end the broadcast and drop the compositor.
         teardownComposite();
         publisher.announce = "source";
-        if (audio) {
-          publisher.source = "camera";
-          publisher.invisible = true; // audio only -> no camera light / no video track
-          publisher.muted = false;
-          void goLive();
-        } else {
-          publisher.source = null;
-          endBroadcast();
-        }
+        publisher.source = null;
+        endBroadcast();
       } finally {
         applying = false;
       }

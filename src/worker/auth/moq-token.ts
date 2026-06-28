@@ -96,8 +96,11 @@ export function publicVerifyJwk(privateJwk: string): PublicVerifyJwk {
   };
 }
 
-// Managed: sign with a per-stream HMAC secret (base64url "k") returned by /assign.
-export async function mintHs256Token(secretK: string, claims: MoqClaims): Promise<string> {
+// Managed: sign with a per-stream HMAC secret (base64url "k") returned by /assign, or a
+// hosted-project key (pro.moq.dev). `kid` defaults to HS256_KID (TinyMoQ's relay ignores it);
+// pass the key's OWN kid for providers that select the verification key by `kid` (multi-tenant
+// hosts like pro.moq.dev do — a wrong kid fails key lookup and the relay refuses the session).
+export async function mintHs256Token(secretK: string, claims: MoqClaims, kid: string = HS256_KID): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
     b64urlDecodeToBytes(secretK),
@@ -105,6 +108,6 @@ export async function mintHs256Token(secretK: string, claims: MoqClaims): Promis
     false,
     ["sign"]
   );
-  const header = { typ: "JWT", alg: "HS256", kid: HS256_KID };
+  const header = { typ: "JWT", alg: "HS256", kid };
   return sign(header, claims, (input) => crypto.subtle.sign("HMAC", key, input));
 }

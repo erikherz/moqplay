@@ -129,22 +129,59 @@ npm run deploy   # builds dist/ and ships the Worker to Cloudflare
 
 ## Choosing a CDN
 
-MoQplay separates the **app** (your Worker) from the **relay network** (the CDN). You decide where the media flows.
+MoQplay separates the **app** (your Worker) from the **relay network** (the CDN). Picking a backend is **pure config — `FLEET_MODE` + `FLEET_ENDPOINT` in `wrangler.jsonc` (plus any secrets), then `npm run deploy`.** No code change. Relay-blind media encryption rides above the transport, so it works identically on all four. The four commented blocks are already in `wrangler.jsonc` — swap the active `vars`.
 
-### Option A — TinyMoQ CDN (available today)
+| Backend | infra | secrets | guide |
+|---|---|---|---|
+| **A. Cloudflare draft-14** | none | none | below |
+| **B. Self-hosted relay** | you run a VM | none | [luke-install.md](./luke-install.md) |
+| **C. pro.moq.dev** | none (hosted) | project key | [promoqdev-install.md](./promoqdev-install.md) |
+| **D. Managed TinyMoQ** | operator | `CDN_API_TOKEN` + BYOK | [CONNECTING-TO-A-FLEET.md](./CONNECTING-TO-A-FLEET.md) |
 
-[TinyMoQ](https://tinymoq.com) is a relay CDN: each box is its own autoscaler exposing a sticky, idempotent `/assign` control API keyed by the broadcast name. The Worker calls it to get a relay `host:port` per broadcast, with geo-routing so publishers land on a nearby box and viewers co-locate on the publisher's box.
+> **Fresh clone?** Start with **A (Cloudflare)** — it's zero-infra and works immediately. `moqplay.com` itself currently runs **C (pro.moq.dev)**.
 
-To use it, run (or rent) TinyMoQ relay boxes, then point the Worker's autoscaler host at them and set `TINYMOQ_PROVISION_KEY`. This is what the reference `moqplay.com` deployment uses.
+### A — Cloudflare draft-14 relay *(recommended start — zero infra)*
 
-### Option B — MoQcdn exchanges *(roadmap — stand by)*
+Cloudflare runs an open, public IETF-draft-14 MoQ relay. The browser connects straight to it: no `/assign`, no token, **nothing to deploy or pay for**.
 
-The next step is **MoQcdn**: a concept for *exchanges* where relay capacity is federated across providers rather than coming from a single operator — think of it as a marketplace/peering layer for MoQ relays.
+```jsonc
+"vars": { "FLEET_MODE": "static", "FLEET_ENDPOINT": "https://draft-14.cloudflare.mediaoverquic.com" }
+```
 
-- **[moqcdnx.com](https://moqcdnx.com)** — the MoQcdn exchange concept and platform *(planned)*.
-- **[moqcdn.net](https://moqcdn.net)** — the first exchange, a production deployment of TinyMoQ technology *(planned)*.
+> No secrets. Just `npm run deploy` and broadcast. ([Cloudflare MoQ docs](https://developers.cloudflare.com/moq/))
 
-When this lands, a MoQplay deployment will be able to source relays from an exchange instead of pinning to one operator's boxes. Details to follow — this section is a placeholder for the work in progress.
+### B — Self-hosted relay (Luke Curley's `moq-relay`)
+
+Run your own open MoQ relay on a VM — full control, no third party. With anonymous auth (`public = ""`) the browser connects directly, same `static` mode as A. Stand the relay up with **[luke-install.md](./luke-install.md)** (build, TLS, the all-important UDP-443 firewall rule), then point the app at it:
+
+```jsonc
+"vars": { "FLEET_MODE": "static", "FLEET_ENDPOINT": "https://your.relay" }
+```
+
+> No secrets. Speaks Luke's native `moq-lite` (the protocol the app's `@moq` components already use).
+
+### C — Hosted project relay ([pro.moq.dev](https://pro.moq.dev)) — *what moqplay.com runs*
+
+A hosted MoQ relay where each **project** lives at `https://<project>.cdn.moq.dev` with its own access and stats — zero infra like A, but **authenticated**. The browser connects directly (same `static` mode) and the Worker mints a short-lived HS256 token per broadcast, signed with your project key. **Bring your own project key.**
+
+```jsonc
+"vars": { "FLEET_MODE": "static", "FLEET_ENDPOINT": "https://<your-project>.cdn.moq.dev" }
+```
+```bash
+npx wrangler secret put MOQ_PROJECT_JWK   # paste your project's JWK (server-side secret, never committed)
+```
+
+> Full setup (create a project, the project-rooted naming, troubleshooting): **[promoqdev-install.md](./promoqdev-install.md)**. If `MOQ_PROJECT_JWK` is unset, `static` mode just connects token-free (Backends A/B).
+
+### D — Managed TinyMoQ CDN (BYOK)
+
+[TinyMoQ](https://tinymoq.com) is a relay CDN: each box is its own autoscaler exposing a sticky, idempotent `/assign` control API keyed by the broadcast name, with geo-routing so publishers land on a nearby box and viewers co-locate. The Worker brokers a relay per broadcast and signs its own per-broadcast tokens (BYOK).
+
+```jsonc
+"vars": { "FLEET_MODE": "brokered", "FLEET_ENDPOINT": "https://tinymoq.com/cdn/assign" }
+```
+
+> Needs secrets: `CDN_API_TOKEN` (operator customer token) and `MOQ_AUTH_PRIVATE_JWK` (your signing key — `npm run keygen`). Full walkthrough: **[CONNECTING-TO-A-FLEET.md](./CONNECTING-TO-A-FLEET.md)**.
 
 ---
 
@@ -182,9 +219,11 @@ Each stream ID maps to a unique namespace (`yourdomain.com/{streamId}.hang`) on 
 ## Links
 
 - [moqplay.com](https://moqplay.com) — reference deployment
-- [cloudflare-install.md](./cloudflare-install.md) — step-by-step deploy guide (managed / Cloudflare)
-- [ubuntu-install.md](./ubuntu-install.md) — run the web app on a single Ubuntu VM (same relay backend)
-- [CONNECTING-TO-A-FLEET.md](./CONNECTING-TO-A-FLEET.md) — connect moqplay to a TinyMoQ fleet (direct or brokered; BYOK)
+- [cloudflare-install.md](./cloudflare-install.md) — deploy the **app** to Cloudflare Workers
+- [ubuntu-install.md](./ubuntu-install.md) — run the **app** on a single Ubuntu VM
+- [luke-install.md](./luke-install.md) — stand up your own **relay** backend (self-hosted `moq-relay`, Backend B)
+- [promoqdev-install.md](./promoqdev-install.md) — use the hosted **[pro.moq.dev](https://pro.moq.dev)** relay (Backend C; BYO project key)
+- [CONNECTING-TO-A-FLEET.md](./CONNECTING-TO-A-FLEET.md) — connect moqplay to a managed TinyMoQ fleet (Backend D; BYOK)
 - [TinyMoQ](https://tinymoq.com) — relay CDN
 - [MoQ Protocol](https://moq.dev/)
 - [Cloudflare MoQ Docs](https://developers.cloudflare.com/moq/)

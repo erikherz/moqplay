@@ -62,6 +62,7 @@ export interface BroadcastStart {
   jwt: string | null; // per-broadcast publisher token (scoped to this stream), or null
   encrypted?: boolean; // true if this stream uses relay-blind E2E media encryption
   contentKey?: string | null; // per-broadcast AES content key (base64url) when encrypted
+  name?: string | null; // on-the-wire broadcast name to publish (config-driven; relative in Backend D)
 }
 
 export async function logBroadcastStart(streamId: string, publisherCdn?: string): Promise<BroadcastStart | null> {
@@ -85,6 +86,7 @@ export async function logBroadcastStart(streamId: string, publisherCdn?: string)
       jwt: data.jwt ?? null,
       encrypted: data.encrypted ?? false,
       contentKey: data.content_key ?? null,
+      name: data.name ?? null,
     };
   } catch (e) {
     console.error("Error logging broadcast start:", e);

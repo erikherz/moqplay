@@ -30,6 +30,12 @@ export interface Env {
   // registered with TinyMoQ). When unset, the Worker falls back to the per-stream HS256
   // key returned by /assign (managed mode). Optional so the file is tenant-agnostic.
   MOQ_AUTH_PRIVATE_JWK?: string;
+  // STATIC mode only, Backend D (hosted project relay, e.g. pro.moq.dev): the project's
+  // symmetric signing key as an oct/HS256 JWK (JSON string with `k`), downloaded from the
+  // provider. When set in static mode the Worker mints a per-broadcast HS256 token with it
+  // (the relay verifies with the same key); when unset, static mode connects token-free
+  // (Backend A/B open relays). Each self-hoster brings their OWN project key — never commit it.
+  MOQ_PROJECT_JWK?: string;
   // DIRECT mode only (FLEET_MODE=direct): the provisioning bearer for a relay box's control
   // API (/assign, /release) — i.e. the box bearer. Legitimate only when you operate the box
   // yourself (operator == customer). In BROKERED mode this must NOT be set on moqplay: the
@@ -539,7 +545,7 @@ async function handleStreamRoutes(
         const now = Math.floor(Date.now() / 1000);
         const watchToken = await tryMintMoqToken(env, {
           put: [],
-          get: [broadcastName(streamId)],
+          get: [broadcastAuthPath(env, streamId)],
           exp: now + VIEWER_TOKEN_TTL,
         });
         const pullToken = await tryMintMoqToken(env, {
@@ -602,7 +608,7 @@ async function handleStreamRoutes(
     // Viewer token: subscribe-only to THIS broadcast (put:[] => cannot publish/hijack).
     const viewerJwt = await tryMintMoqToken(env, {
       put: [],
-      get: [broadcastName(streamId)],
+      get: [broadcastAuthPath(env, streamId)],
       exp: Math.floor(Date.now() / 1000) + VIEWER_TOKEN_TTL,
     }, relay.key);
 
@@ -617,6 +623,10 @@ async function handleStreamRoutes(
     return Response.json({
       relay: `${relay.host}:${relay.port}`,
       jwt: viewerJwt,
+      // The on-the-wire broadcast name to subscribe to (relative under the project root in
+      // Backend D; the domain-scoped absolute name otherwise). Client prefers this over its
+      // own NAMESPACE_PREFIX so naming stays config-driven.
+      broadcast: broadcastDataName(env, streamId),
       encrypted,
       content_key: contentKey,
     });
@@ -701,8 +711,14 @@ function fleetEndpoint(env: Env): string {
 }
 
 // Which "get a relay" path this deployment uses (see FLEET_MODE). Default direct.
-function fleetMode(env: Env): "direct" | "brokered" {
-  return (env.FLEET_MODE || "").trim().toLowerCase() === "brokered" ? "brokered" : "direct";
+function fleetMode(env: Env): "direct" | "brokered" | "static" {
+  const m = (env.FLEET_MODE || "").trim().toLowerCase();
+  if (m === "brokered") return "brokered";
+  // "static": FLEET_ENDPOINT IS an open MoQ relay the browser connects to directly — no
+  // autoscaler /assign, no per-broadcast token (e.g. Cloudflare's draft-14 interop relay, or
+  // a self-hosted moq-relay with anonymous auth). Media (relay-blind) encryption is unchanged.
+  if (m === "static") return "static";
+  return "direct";
 }
 
 // The configured fleet's autoscaler hostname (e.g. cdn.tinymoq.com).
@@ -728,6 +744,33 @@ function isFleetHost(env: Env, host: string): boolean {
 
 function broadcastName(streamId: string): string {
   return `moqplay.com/${streamId}.hang`;
+}
+
+// Backend D (hosted project relay, e.g. pro.moq.dev): the relay roots every connection at the
+// PROJECT — the FLEET_ENDPOINT subdomain (erik.cdn.moq.dev -> "erik"). Broadcasts live in a
+// namespace RELATIVE to that root. Returns the project root in Backend D, else null (A/B/C).
+function projectRoot(env: Env): string | null {
+  if (fleetMode(env) !== "static" || !env.MOQ_PROJECT_JWK) return null;
+  try {
+    const label = new URL(fleetEndpoint(env)).hostname.split(".")[0];
+    return label || null;
+  } catch {
+    return null;
+  }
+}
+
+// The broadcast path the relay TOKEN must authorize (ABSOLUTE). Backend D: <project>/<id>.hang
+// (the relay checks tokens against the absolute, project-rooted path). A/B/C: the domain name.
+function broadcastAuthPath(env: Env, streamId: string): string {
+  const root = projectRoot(env);
+  return root ? `${root}/${streamId}.hang` : broadcastName(streamId);
+}
+
+// The broadcast NAME the browser publishes/subscribes on the wire. Backend D: RELATIVE
+// <id>.hang — the relay adds the project root and strips it from announce interests, so a
+// prefixed name never matches. A/B/C: the same absolute name the token authorizes.
+function broadcastDataName(env: Env, streamId: string): string {
+  return projectRoot(env) ? `${streamId}.hang` : broadcastName(streamId);
 }
 
 // Relay-blind E2E: decide whether to hand the per-broadcast content key to this viewer.
@@ -840,6 +883,13 @@ async function assignRelay(
   pull?: string | null
 ): Promise<{ host: string; port: number; key?: string } | null> {
   const name = broadcastName(streamId);
+  // Static (open relay, e.g. Cloudflare draft-14 or a self-hosted moq-relay): the browser
+  // connects DIRECTLY to the configured relay; there is no autoscaler /assign and no
+  // per-broadcast token. Hand back the fixed relay host:port (443); publisher and viewer
+  // rendezvous on the broadcast `name`. Media encryption is untouched (content key still flows).
+  if (fleetMode(env) === "static") {
+    return { host: fleetHost(env), port: 443 };
+  }
   // Path 2 (brokered): hand the broadcast to the operator and let it pick the box. The
   // cdnHost/origin/pull overrides are direct-mode (self-selected box) concerns and don't
   // apply — the operator owns topology.
@@ -919,6 +969,9 @@ async function assignViaBroker(
 // which owns the box lifecycle.
 async function releaseRelay(env: Env, streamId: string, cdnHost?: string | null, provisionKey?: string | null): Promise<void> {
   const name = broadcastName(streamId);
+  // Static/open relay: nothing to release — the relay manages its own lifecycle and we never
+  // reserved anything via /assign.
+  if (fleetMode(env) === "static") return;
   if (fleetMode(env) === "brokered") {
     // Derive the release URL from the assign URL (…/assign → …/release). If FLEET_ENDPOINT
     // doesn't end in /assign we can't derive it — skip and let the operator reap the box.
@@ -971,6 +1024,27 @@ const ENTERPRISE_PULL_TOKEN_TTL = 5 * 60; // 5 min
 // so the endpoint still works). BYOK: sign EdDSA with the tenant's private key when set.
 // Managed: else sign HS256 with the per-stream `streamKey` from /assign. Neither => null.
 async function tryMintMoqToken(env: Env, claims: MoqClaims, streamKey?: string | null): Promise<string | null> {
+  // Static/open relay. Two sub-cases:
+  //  - Backend A/B (anonymous): Cloudflare draft-14 / self-hosted public="" do no token auth,
+  //    so mint nothing — the browser connects without a `?jwt=`.
+  //  - Backend D (hosted project, e.g. pro.moq.dev): the relay verifies HS256 tokens signed
+  //    with the project's symmetric key (MOQ_PROJECT_JWK). Mint one scoped to this broadcast
+  //    (the same put/get claims TinyMoQ uses) so the browser can publish/subscribe in the
+  //    project namespace. Media encryption is independent of the transport token either way.
+  if (fleetMode(env) === "static") {
+    if (env.MOQ_PROJECT_JWK) {
+      try {
+        const jwk = JSON.parse(env.MOQ_PROJECT_JWK) as { k?: string; kid?: string };
+        // Stamp the project key's OWN kid so a multi-tenant host (pro.moq.dev) can select the
+        // right verification key. Falls back to HS256_KID if the JWK omits kid.
+        if (jwk.k) return await mintHs256Token(jwk.k, claims, jwk.kid);
+        console.warn("[moq-token] MOQ_PROJECT_JWK has no `k` (expected an oct/HS256 JWK); no token");
+      } catch (e) {
+        console.error("[moq-token] MOQ_PROJECT_JWK mint failed", e);
+      }
+    }
+    return null;
+  }
   try {
     if (env.MOQ_AUTH_PRIVATE_JWK) return await mintEd25519Token(env.MOQ_AUTH_PRIVATE_JWK, claims);
     if (streamKey) return await mintHs256Token(streamKey, claims);
@@ -1132,8 +1206,8 @@ async function handleStatsRoutes(
     // else with the tenant's BYOK Ed25519 key.
     const publisherJwt = assigned
       ? await tryMintMoqToken(env, {
-          put: [broadcastName(body.stream_id)],
-          get: [broadcastName(body.stream_id)],
+          put: [broadcastAuthPath(env, body.stream_id)],
+          get: [broadcastAuthPath(env, body.stream_id)],
           exp: Math.floor(Date.now() / 1000) + PUBLISHER_TOKEN_TTL,
         }, assigned.key)
       : null;
@@ -1144,6 +1218,8 @@ async function handleStatsRoutes(
       geo,
       relay: assigned ? `${relayHost}:${relayPort}` : null,
       jwt: publisherJwt,
+      // On-the-wire broadcast name to publish (relative under the project root in Backend D).
+      name: broadcastDataName(env, body.stream_id),
       encrypted,
       content_key: contentKey,
     });

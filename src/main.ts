@@ -102,7 +102,7 @@ interface ServerStatus {
 
 const serverStatus: ServerStatus = {
   mode: needsPolyfill ? "websocket" : "webtransport",
-  selectedServer: "cdn.gpcmoq.com",
+  selectedServer: "(not connected)",
   connected: false,
   raceResults: [],
 };
@@ -485,8 +485,14 @@ function updateServerStatusPanel() {
   const serverPanel = document.getElementById("server-panel");
   if (!serverPanel) return;
 
-  const statusClass = serverStatus.connected ? "connected" : "disconnected";
-  const statusText = serverStatus.connected ? "Connected" : "Disconnected";
+  // Three states: "Standing by" (yellow) when no real relay is assigned yet — the
+  // selectedServer placeholders start with "(" (the serverStatus default and
+  // setActiveRelay(null)); "Connected" (green) once a relay is active; "Disconnected"
+  // (red) otherwise. Avoids the misleading green "Connected: (not connected)" on load.
+  const standby = !serverStatus.selectedServer || serverStatus.selectedServer.startsWith("(");
+  const statusClass = standby ? "partial" : (serverStatus.connected ? "connected" : "disconnected");
+  const statusText = standby ? "Standing by" : (serverStatus.connected ? "Connected" : "Disconnected");
+  const summaryLabel = standby ? statusText : `${statusText}: ${serverStatus.selectedServer}`;
   const modeLabel = serverStatus.mode === "websocket" ? "WebSocket (Safari fallback)" : "WebTransport (native)";
 
   // Build details HTML
@@ -526,7 +532,7 @@ function updateServerStatusPanel() {
   serverPanel.innerHTML = `
     <div class="server-status-summary">
       <span class="status-indicator ${statusClass}"></span>
-      <span>${statusText}: ${serverStatus.selectedServer}</span>
+      <span>${summaryLabel}</span>
       <button class="details-btn" id="server-details-btn">Details</button>
     </div>
     <div class="server-details hidden" id="server-details-content">
@@ -554,8 +560,17 @@ function setActiveRelay(relay: string | null) {
   updateServerStatusPanel();
 }
 
+// Build the WebTransport connect URL for a relay "host[:port]". A relay JWT is appended as
+// ?jwt= only when present — open relays (static FLEET_MODE: Cloudflare draft-14 or a
+// self-hosted moq-relay) need no token, so we omit it. A redundant ":443" is stripped so the
+// URL is the bare https origin. Media stays end-to-end encrypted regardless of the token.
+function relayConnectUrl(relay: string, jwt?: string | null): string {
+  const hostPort = relay.replace(/:443$/, "");
+  return jwt ? `https://${hostPort}/?jwt=${jwt}` : `https://${hostPort}/`;
+}
+
 // Status pills shown in the publisher header and on the player. We make a claim at each
-// layer and nothing more: "Relay-blind" is an INFRASTRUCTURE property (encryption is
+// layer and nothing more: "media encrypted" is an INFRASTRUCTURE property (encryption is
 // mandatory, so it shows on every stream and says nothing about who may watch); the
 // audience pill carries the ACCESS claim (Public vs Invite-only); and "Security details"
 // hangs the honest caveats (static key, metadata, not-DRM) off the access affordance.
@@ -566,14 +581,14 @@ const PILL_CSS =
   "display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:600;" +
   "border:1px solid;border-radius:999px;padding:2px 8px;line-height:1;white-space:nowrap;";
 
-// "Relay-blind" — shown on EVERY stream (encryption is mandatory). States that the relay
+// "media encrypted" — shown on EVERY stream (encryption is mandatory). States that the relay
 // and server only ever move ciphertext they can't read. Deliberately NOT a privacy claim
 // about who may watch — that is the audience pill's job.
 function createRelayBlindBadge(): HTMLSpanElement {
   const badge = document.createElement("span");
   badge.className = "relay-blind-badge";
   badge.title = "Encrypted in your browser, decrypted in viewers' browsers. The relay and server only move ciphertext they can't read.";
-  badge.innerHTML = SHIELD_SVG + `<span>Relay-blind</span>`;
+  badge.innerHTML = SHIELD_SVG + `<span>media encrypted</span>`;
   badge.style.cssText = PILL_CSS + "color:#22c55e;border-color:rgba(34,197,94,0.5);";
   return badge;
 }
@@ -636,6 +651,9 @@ function createSecurityDetails(): HTMLSpanElement {
 // Per-broadcast relay tokens are minted server-side (BYOK) and returned by the Worker:
 // publishers get one from POST /api/stats/broadcast, viewers from GET /route. There is no
 // static client token — the browser never holds a long-lived, all-paths credential.
+// Fallback broadcast-name prefix for Backends A/B/C. The Worker is the source of truth for the
+// on-the-wire name (it returns `name`/`broadcast`, relative under the project root in Backend D);
+// this is only used if that field is absent. Must match the Worker's broadcastName().
 const NAMESPACE_PREFIX = "moqplay.com";
 
 // Dynamic imports for the MoQ web components - MUST happen after polyfills are installed.
@@ -1087,11 +1105,11 @@ function initBroadcastView(streamId: string, user: User | null) {
         broadcastEventId = res?.eventId ?? null;
         const relay = res?.relay;
         const jwt = res?.jwt;
-        if (!relay || !jwt) {
-          // /assign failed or no token was minted — there is no static relay/token to
-          // fall back to. Allow a retry on the next device action rather than
-          // connecting to a dead endpoint.
-          console.error("[routing] go-live got no relay/token (assign unavailable); pick a device again to retry");
+        if (!relay) {
+          // No relay resolved (/assign unavailable). In static mode jwt is intentionally null
+          // (open relay, no token), so only the relay is required here. Allow a retry on the
+          // next device action rather than connecting to a dead endpoint.
+          console.error("[routing] go-live got no relay (assign unavailable); pick a device again to retry");
           setActiveRelay(null);
           goLivePromise = null;
           return;
@@ -1110,7 +1128,11 @@ function initBroadcastView(streamId: string, user: User | null) {
           armPublisher(); // idempotent; covers the case where settings load lost the race
           await setMediaKey(res.contentKey);
         }
-        publisher.setAttribute("url", `https://${relay}/?jwt=${jwt}`);
+        // Use the Worker's config-driven broadcast name (relative under the project root in
+        // Backend D; the absolute domain name otherwise). Set before the url so it's in place
+        // when connect fires.
+        publisher.setAttribute("name", res?.name ?? streamName);
+        publisher.setAttribute("url", relayConnectUrl(relay, jwt));
         setActiveRelay(relay);
         console.log("[routing] broadcaster relay:", relay, "eventId:", broadcastEventId);
       });
@@ -1634,8 +1656,10 @@ async function initWatchView(streamId: string, user: User | null) {
       // (Worker logs which of A/B; the player only sees a host:port here.)
       console.log(`[route] played mode=edge/origin relay=${routeInfo.relay}${noEnterprise ? " (enterprise fell back)" : ""}`);
       setActiveRelay(routeInfo.relay);
-      watcher.setAttribute("url", `https://${routeInfo.relay}/?jwt=${routeInfo.jwt}`);
-      watcher.setAttribute("name", streamName);
+      watcher.setAttribute("url", relayConnectUrl(routeInfo.relay, routeInfo.jwt));
+      // Prefer the Worker's config-driven broadcast name (relative under the project root in
+      // Backend D); fall back to the locally-built name for A/B/C.
+      watcher.setAttribute("name", routeInfo.broadcast ?? streamName);
     }
     console.log(`[watch-timing] url set, connecting @ ${ms()}`);
 

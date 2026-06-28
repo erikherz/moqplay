@@ -7,18 +7,31 @@
     "directory": "./dist",
     "binding": "ASSETS"
   },
-  // How this deployment gets a relay (config, not code — see src/worker/index.ts).
-  //   FLEET_MODE "direct":   call a relay box's /assign yourself (FLEET_ENDPOINT = box base);
-  //                          credential = TINYMOQ_PROVISION_KEY secret (the box bearer).
+  // How this deployment gets a relay (config, not code — see src/worker/index.ts and the
+  // "Choosing a CDN" section of readme.md). Switch backends by editing the two vars below.
+  //   FLEET_MODE "static":   FLEET_ENDPOINT IS a MoQ relay the browser connects to directly — no
+  //                          /assign. OPEN relays (Cloudflare draft-14, self-hosted public="")
+  //                          need no token/secret. A hosted PROJECT relay (pro.moq.dev) is also
+  //                          static but authenticated: set MOQ_PROJECT_JWK (your project key) and
+  //                          the Worker mints an HS256 token per broadcast.
   //   FLEET_MODE "brokered": POST {broadcast} to a CDN operator's broker, which picks the box
   //                          (FLEET_ENDPOINT = the broker's full assign URL); credential =
   //                          CDN_API_TOKEN secret (the operator-issued CUSTOMER token).
-  // moqplay.com runs brokered: it holds only the customer token; the box bearer stays with
-  // the operator and is never set here. MOQ_AUTH_PRIVATE_JWK (secret) signs tokens; its public
-  // half is the verify_jwk the operator installs on the boxes (BYOK, both modes).
+  //   FLEET_MODE "direct":   call a relay box's /assign yourself (FLEET_ENDPOINT = box base);
+  //                          credential = TINYMOQ_PROVISION_KEY secret (the box bearer).
+  // brokered/direct sign per-broadcast tokens with MOQ_AUTH_PRIVATE_JWK (secret, BYOK).
+  //
+  // ACTIVE: moqplay.com runs Backend C — pro.moq.dev project "erik" (needs the MOQ_PROJECT_JWK
+  // secret). Switch backends by editing the two vars below; alternatives (see readme + docs):
+  //   A  Cloudflare draft-14 (zero infra, recommended start for a fresh clone):
+  //      "vars": { "FLEET_MODE": "static", "FLEET_ENDPOINT": "https://draft-14.cloudflare.mediaoverquic.com" },
+  //   B  self-hosted Luke moq-relay (anonymous; see luke-install.md):
+  //      "vars": { "FLEET_MODE": "static", "FLEET_ENDPOINT": "https://your.relay" },
+  //   D  managed TinyMoQ (BYOK; needs CDN_API_TOKEN + MOQ_AUTH_PRIVATE_JWK; see CONNECTING-TO-A-FLEET.md):
+  //      "vars": { "FLEET_MODE": "brokered", "FLEET_ENDPOINT": "https://tinymoq.com/cdn/assign" },
   "vars": {
-    "FLEET_MODE": "brokered",
-    "FLEET_ENDPOINT": "https://tinymoq.com/cdn/assign"
+    "FLEET_MODE": "static",
+    "FLEET_ENDPOINT": "https://erik.cdn.moq.dev"
   },
   "d1_databases": [
     {

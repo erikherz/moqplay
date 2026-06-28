@@ -148,6 +148,19 @@ export function createCompositor(): Compositor {
   const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ac = new AC();
   const dest = ac.createMediaStreamDestination();
+
+  // Autoplay policy (esp. Safari): an AudioContext can start/stay "suspended", and a
+  // suspended context's MediaStreamDestination publishes SILENCE — which is exactly the
+  // "audio-only works, but no audio once video is added" symptom (the composite mix runs
+  // through this context; native audio-only capture doesn't). We resume on the next user
+  // gesture (a guaranteed activation, unlike a resume() called after an await), and detach
+  // the listener once running.
+  const onGesture = () => {
+    ac.resume().then(() => {
+      if (ac.state === "running") document.removeEventListener("pointerdown", onGesture);
+    }).catch(() => { /* retry on the next gesture */ });
+  };
+  document.addEventListener("pointerdown", onGesture);
   let micStream: MediaStream | null = null;
   let micNode: MediaStreamAudioSourceNode | null = null;
   let sysNode: MediaStreamAudioSourceNode | null = null;
@@ -200,10 +213,15 @@ export function createCompositor(): Compositor {
     async setMicEnabled(on) {
       if (stopped) return;
       if (on && !micStream) {
-        void ac.resume().catch(() => {});
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         micNode = ac.createMediaStreamSource(micStream);
         micNode.connect(dest);
+        // Resume AFTER wiring the graph; await it so we don't bind a silent (suspended)
+        // destination track. If it's still not running, the pointerdown fallback recovers it.
+        await ac.resume().catch(() => {});
+        if (ac.state !== "running") {
+          console.warn(`[compositor] AudioContext is ${ac.state}; audio stays silent until a click/tap on the page resumes it`);
+        }
       } else if (!on && micStream) {
         try { micNode?.disconnect(); } catch { /* ignore */ }
         micStream.getTracks().forEach((t) => t.stop());
@@ -227,6 +245,7 @@ export function createCompositor(): Compositor {
     stop() {
       if (stopped) return;
       stopped = true;
+      document.removeEventListener("pointerdown", onGesture);
       cancelAnimationFrame(raf);
       screen?.stream.getTracks().forEach((t) => t.stop());
       camera?.stream.getTracks().forEach((t) => t.stop());

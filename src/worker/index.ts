@@ -53,10 +53,20 @@ export interface Env {
   // and returns {relay}). Default "direct". In brokered mode moqplay never sees box topology
   // and holds no per-box secret, so the operator adding/removing boxes needs no config change.
   FLEET_MODE?: string;
-  // Mode C (Enterprise): bearer for tinymoq's ASN→relay resolve API
-  // (GET /api/enterprise/resolve). Optional — when unset, Mode C is skipped and the
-  // viewer route behaves exactly as Modes B/A do today.
-  RESOLVE_KEY?: string;
+  // Mode C (Enterprise) — WORKER-DRIVEN steering. When set, this Worker ITSELF (not the
+  // broker, not any external resolve API) steers matching viewers to this dedicated edge
+  // host (e.g. "erik.moqcdn.net"). The browser couriers its BYOK watch token to the edge's
+  // /assign, which validates it against this tenant's verify_jwk (box-side "C1" — no bearer
+  // in the browser). Unset => Mode C is off and the viewer route is pure brokered B/A.
+  ENTERPRISE_EDGE_HOST?: string;
+  // Optional ASN allow-list for ENTERPRISE_EDGE_HOST (comma-separated, e.g. "13335,7922").
+  // Empty/unset => steer ALL viewers to the edge. Set to gate steering to specific networks.
+  ENTERPRISE_ASNS?: string;
+  // How the edge sources the broadcast: "crosspull" (default) — the edge pulls it from the
+  // publisher's origin relay, so the Worker hands the browser `edgeHost` (real origin
+  // host:port) + a cluster-flagged `pullToken`. "standalone" — the publisher is already on
+  // the edge (edge = origin), so neither is sent and the only new piece is C1 viewer auth.
+  ENTERPRISE_MODE?: string;
   // Per-stream live chat rooms (one Durable Object instance per streamId).
   CHAT_ROOMS: DurableObjectNamespace;
 }
@@ -527,43 +537,43 @@ async function handleStreamRoutes(
     const asn = cf?.asn ?? 0;
     const asOrg = cf?.asOrganization ?? "";
     const skipEnterprise = url.searchParams.get("noEnterprise") === "1";
-    if (!skipEnterprise && asn) {
-      const ent = await resolveEnterprise(env, asn);
+    if (!skipEnterprise) {
+      const ent = enterpriseEdge(env, asn, current);
       if (ent) {
-        // Both tokens are minted with OUR key (BYOK EdDSA) — the enterprise relay is
-        // registered with earthseed's PUBLIC key. watchToken authorizes the browser to
-        // subscribe on the local relay; pullToken is the local relay's cluster-flagged
-        // pass to pull the broadcast from the remote edge (root get:[''] scope to match
-        // the working cross-CDN edge pull). If BYOK isn't configured we can't mint
-        // either → fall through to B/A.
+        // crosspull (default): the edge pulls the broadcast from the publisher's origin, so we
+        // hand the browser `edgeHost` (real origin host:port) + a cluster-flagged pullToken.
+        // standalone: publisher is already on the edge — no origin/pull, just C1 viewer auth.
+        const crossPull = (env.ENTERPRISE_MODE || "crosspull").trim().toLowerCase() !== "standalone";
         const now = Math.floor(Date.now() / 1000);
+        // watchToken authorizes the browser to subscribe to THIS broadcast on the edge; the
+        // edge validates it against this tenant's PUBLIC verify_jwk (BYOK EdDSA). pullToken is
+        // the edge's cluster-flagged pass to pull from the origin (root get:[''] scope, matching
+        // the working cross-CDN edge pull; short-lived as it's browser-couriered). If BYOK isn't
+        // configured we can't mint → fall through to B/A.
         const watchToken = await tryMintMoqToken(env, {
           put: [],
           get: [broadcastName(streamId)],
           exp: now + VIEWER_TOKEN_TTL,
         });
-        const pullToken = await tryMintMoqToken(env, {
-          put: [],
-          get: [""],
-          cluster: true,
-          // Short-lived: this root+cluster token is browser-held (see ENTERPRISE_PULL_TOKEN_TTL).
-          exp: now + ENTERPRISE_PULL_TOKEN_TTL,
-        });
-        if (watchToken && pullToken) {
+        const pullToken = crossPull
+          ? await tryMintMoqToken(env, { put: [], get: [""], cluster: true, exp: now + ENTERPRISE_PULL_TOKEN_TTL })
+          : null;
+        if (watchToken && (!crossPull || pullToken)) {
           const { encrypted, contentKey } = await viewerContentKey(request, env, streamId, row.content_key);
           console.log(
-            `[route] mode=C enterprise asn=${asn} org=${JSON.stringify(asOrg)} ` +
-            `name=${JSON.stringify(ent.name)} relay=${ent.localRelayHost} edge=${ent.edgeHost} stream=${streamId}`
+            `[route] mode=C enterprise(${crossPull ? "crosspull" : "standalone"}) asn=${asn} ` +
+            `org=${JSON.stringify(asOrg)} relay=${ent.localRelayHost}` +
+            (crossPull ? ` edge=${ent.edgeHost}` : ``) + ` stream=${streamId}`
           );
           return Response.json({
             mode: "enterprise",
             relay: ent.localRelayHost,
-            edgeHost: ent.edgeHost,
             broadcast: broadcastName(streamId),
             watchToken,
-            pullToken,
-            // A/B-compatible aliases so any older player still finds relay + jwt.
+            // A/B-compatible alias so any older player still finds jwt.
             jwt: watchToken,
+            // cross-pull legs (omitted in standalone): origin to pull from + the pull pass.
+            ...(crossPull ? { edgeHost: ent.edgeHost, pullToken } : {}),
             encrypted,
             content_key: contentKey,
           });
@@ -753,36 +763,27 @@ async function viewerContentKey(
   return { encrypted: true, contentKey: rowContentKey };
 }
 
-// Mode C (Enterprise): ask tinymoq whether this viewer's network (by ASN) has a PRIVATE
-// on-net relay. That relay is unreachable from any server, so we only RESOLVE here and
-// hand its address + tokens to the BROWSER (the only thing on-net that can reach it).
-// Returns null on ANY failure (no key, bad ASN, no match, network/timeout) so the caller
-// falls back to Mode B/A — the enterprise path must never hard-fail a viewer.
-async function resolveEnterprise(
+// Mode C (Enterprise) — WORKER-DRIVEN steering rule. The Worker decides locally (from its
+// own config, NOT the broker or an external resolve API) whether to steer this viewer to a
+// dedicated edge. When ENTERPRISE_EDGE_HOST is set, matching viewers are steered there; the
+// browser couriers the BYOK watch token to that edge's /assign (validated against this
+// tenant's verify_jwk — box-side C1), and the edge cluster-pulls the broadcast from `edgeHost`
+// (the publisher's CURRENT relay, which we already resolved) using the BYOK pull token. The
+// match rule is: feature on (host set) AND (no ASN allow-list, or this viewer's ASN is in it).
+// Returns null = no steering (fall through to brokered B/A); never hard-fails a viewer.
+function enterpriseEdge(
   env: Env,
-  asn: number
-): Promise<{ localRelayHost: string; edgeHost: string; name: string } | null> {
-  if (!env.RESOLVE_KEY || !Number.isFinite(asn) || asn <= 0) return null;
-  try {
-    const res = await fetch(`https://tinymoq.com/api/enterprise/resolve?asn=${asn}`, {
-      headers: { "X-Resolve-Key": env.RESOLVE_KEY },
-      signal: AbortSignal.timeout(2000),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      match?: boolean;
-      localRelayHost?: string;
-      edgeHost?: string;
-      name?: string;
-    };
-    // Confirmed contract: match → {match:true, localRelayHost, edgeHost, name};
-    // no match → {match:false}. 401/400 already handled by the !res.ok check above.
-    if (!data || data.match !== true || !data.localRelayHost || !data.edgeHost) return null;
-    return { localRelayHost: data.localRelayHost, edgeHost: data.edgeHost, name: data.name ?? "" };
-  } catch (e) {
-    console.warn("[route] enterprise resolve failed", e);
-    return null;
-  }
+  asn: number,
+  origin: { host: string; port: number }
+): { localRelayHost: string; edgeHost: string; name: string } | null {
+  const host = (env.ENTERPRISE_EDGE_HOST || "").trim();
+  if (!host) return null; // feature off
+  const asnList = (env.ENTERPRISE_ASNS || "")
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (asnList.length > 0 && !asnList.includes(asn)) return null; // gated, not this network
+  return { localRelayHost: host, edgeHost: `${origin.host}:${origin.port}`, name: host };
 }
 
 // Generate a fresh 256-bit content encryption key (base64url, unpadded) for a

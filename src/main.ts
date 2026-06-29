@@ -1426,23 +1426,41 @@ function showWatchLoginRequired() {
 // reach the PRIVATE on-net relay. Step 1: tell the local relay to pull the broadcast from
 // the remote edge (origin) using the cluster pull pass; it replies "host:port". Step 2 is
 // the returned URL: connect there with the watchToken and subscribe to <broadcast>.
-// Param names (broadcast/origin/pull/jwt) are the deployed autoscaler's — stable. `origin`
-// is passed verbatim from edgeHost; the relay resolves the port itself. The step-1 call
-// carries NO bearer: the relay is trust-internal (reachable on-net only), and we never put
-// a provisioning bearer in the browser. Returns null on any failure → caller falls to B/A.
+// C1 contract: auth is the BYOK watch token as a `jwt=` QUERY PARAM (not an Authorization
+// header — a header would trigger a CORS preflight on this cross-origin call; a query param
+// doesn't). The edge resolves the tenant by the token's kid, validates it against this
+// tenant's verify_jwk, and requires a valid subscribe <broadcast> scope. No provisioning
+// bearer ever enters the browser → relay-blind preserved. `origin`/`pull` are added ONLY for
+// cross-pull (edge pulls the broadcast from the publisher's origin relay); in standalone mode
+// the worker omits edgeHost/pullToken because the publisher is already on the edge. The
+// response body is the EDGE's media endpoint "host:port" as plain text (some builds wrap it as
+// JSON {relay}, so we accept both). The browser MUST dial that returned value (NOT `origin`,
+// which is only the upstream the edge pulls from). The same watch token then drives the QUIC
+// connect. Returns null on any failure → caller falls to B/A.
 async function resolveEnterpriseConnectUrl(route: StreamRoute): Promise<string | null> {
-  if (!route.broadcast || !route.edgeHost || !route.pullToken || !route.watchToken) return null;
+  if (!route.broadcast || !route.watchToken) return null;
   try {
     const q = new URLSearchParams({
       broadcast: route.broadcast,
-      origin: route.edgeHost,
-      pull: route.pullToken,
+      jwt: route.watchToken, // same watch token used on the QUIC connect step
     });
+    if (route.edgeHost) q.set("origin", route.edgeHost); // cross-pull only (upstream, not dialed)
+    if (route.pullToken) q.set("pull", route.pullToken); // cross-pull only
     const res = await fetch(`https://${route.relay}/assign?${q.toString()}`, {
       signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) return null;
-    const hostPort = (await res.text()).trim(); // plain text "<host>:<port>"
+    const body = (await res.text()).trim();
+    if (!body) return null;
+    // Plain "host:port" or JSON {relay:"host:port"} (mirrors the Worker's dual-mode /assign parse).
+    let hostPort = body;
+    if (body.startsWith("{")) {
+      try {
+        hostPort = String((JSON.parse(body) as { relay?: string }).relay ?? "").trim();
+      } catch {
+        return null;
+      }
+    }
     if (!hostPort) return null;
     return `https://${hostPort}/?jwt=${route.watchToken}`;
   } catch (e) {
